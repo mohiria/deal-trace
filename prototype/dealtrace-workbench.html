@@ -691,6 +691,214 @@
       justify-content: center;
       width: 100%;
     }
+
+    .state-lab {
+      margin-top: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .state-title {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 4px 2px 0;
+    }
+
+    .state-title h2 {
+      margin: 0 0 5px;
+      font-size: 20px;
+      line-height: 1.25;
+    }
+
+    .state-title p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .state-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .state-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: 0 10px 28px rgba(31, 36, 56, 0.04);
+      min-height: 260px;
+    }
+
+    .state-card h3 {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.35;
+    }
+
+    .state-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .form-row {
+      display: grid;
+      gap: 6px;
+    }
+
+    .form-row.full {
+      grid-column: 1 / -1;
+    }
+
+    .form-row label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .mock-input {
+      min-height: 36px;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: #30374c;
+      background: #fff;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .mock-input.muted {
+      color: var(--muted);
+      background: var(--surface-soft);
+    }
+
+    .mock-input.error {
+      border-color: #f4a3a3;
+      background: #fff8f8;
+    }
+
+    .mock-input.success {
+      border-color: #a9e7cf;
+      background: #f7fffb;
+    }
+
+    .alert {
+      border-radius: 9px;
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      font-size: 13px;
+      line-height: 1.55;
+      margin-top: 12px;
+    }
+
+    .alert.warning {
+      background: var(--orange-soft);
+      border-color: #f5d293;
+      color: #8a5204;
+    }
+
+    .alert.danger {
+      background: var(--red-soft);
+      border-color: #f3b2b2;
+      color: #9f1d1d;
+    }
+
+    .alert.info {
+      background: var(--brand-soft);
+      border-color: #cfe0ff;
+      color: #1749d5;
+    }
+
+    .status-stack {
+      display: grid;
+      gap: 9px;
+    }
+
+    .status-line {
+      display: grid;
+      grid-template-columns: 118px 1fr;
+      gap: 10px;
+      align-items: start;
+      padding: 9px 10px;
+      border: 1px solid #edf0f6;
+      background: var(--surface-soft);
+      border-radius: 9px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .status-line strong {
+      color: #30374c;
+    }
+
+    .status-line span {
+      color: var(--muted);
+    }
+
+    .dialog-preview {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      box-shadow: 0 16px 40px rgba(36, 42, 66, 0.08);
+      overflow: hidden;
+    }
+
+    .dialog-head {
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 850;
+    }
+
+    .dialog-body {
+      padding: 14px;
+    }
+
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 12px 14px;
+      border-top: 1px solid var(--line);
+      background: #fbfcff;
+    }
+
+    .btn.disabled,
+    .mini-btn.disabled {
+      opacity: 0.45;
+      background: #f3f4f8;
+      color: #8b92a5;
+      box-shadow: none;
+    }
+
+    .component-note {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 12px 14px;
+      border: 1px dashed #cbd5e1;
+      border-radius: var(--radius);
+      background: #fbfcff;
+    }
   </style>
 </head>
 <body>
@@ -895,6 +1103,183 @@
             </tr>
           </tbody>
         </table>
+      </section>
+
+      <section class="state-lab" aria-label="关键交互状态样例">
+        <div class="state-title">
+          <div>
+            <h2>关键交互状态样例</h2>
+            <p>这些样例用于约束后续 Vue + Arco 实现中的表单校验、重复提示、只读态和角色操作差异。</p>
+          </div>
+          <span class="tag blue">OpenSpec frontend-workbench 参考</span>
+        </div>
+
+        <div class="state-grid">
+          <article class="state-card">
+            <div class="state-card-head">
+              <h3>新建客户 · 唯一性校验</h3>
+              <span class="tag red">阻止提交</span>
+            </div>
+            <div class="form-grid">
+              <div class="form-row full">
+                <label>客户名称</label>
+                <div class="mock-input error">
+                  <span>星河建设集团</span>
+                  <span class="tag red">已存在</span>
+                </div>
+              </div>
+              <div class="form-row full">
+                <label>统一社会信用代码</label>
+                <div class="mock-input success">
+                  <span>91440101MA59X9QK2A</span>
+                  <span class="tag green">已自动大写</span>
+                </div>
+              </div>
+            </div>
+            <div class="alert danger">
+              客户名称去除首尾空格后与已有客户完全一致，不允许新建。统一社会信用代码需通过 18 位标准格式和校验位校验。
+            </div>
+          </article>
+
+          <article class="state-card">
+            <div class="state-card-head">
+              <h3>新建业务线索 · 同类线索查重</h3>
+              <span class="tag orange">需确认历史</span>
+            </div>
+            <div class="form-grid">
+              <div class="form-row full">
+                <label>客户</label>
+                <div class="mock-input">
+                  <span>星河建设集团 · 91440101MA59X9QK2A</span>
+                  <span class="tag blue">搜索选择</span>
+                </div>
+              </div>
+              <div class="form-row">
+                <label>业务类型</label>
+                <div class="mock-input">BIM咨询</div>
+              </div>
+              <div class="form-row">
+                <label>自然年度</label>
+                <div class="mock-input muted">2026 · 系统生成</div>
+              </div>
+              <div class="form-row">
+                <label>联系人</label>
+                <div class="mock-input">陈思远</div>
+              </div>
+              <div class="form-row">
+                <label>联系电话</label>
+                <div class="mock-input">13826712671</div>
+              </div>
+              <div class="form-row full">
+                <label>预计金额</label>
+                <div class="mock-input">120,000.00 元</div>
+              </div>
+            </div>
+            <div class="alert warning">
+              同一自然年度、同一客户、同一业务类型已有历史流失线索，可继续新建；若已有进行中或已赢单线索，则提交时必须阻止。
+            </div>
+          </article>
+
+          <article class="state-card">
+            <div class="state-card-head">
+              <h3>结束线索 · 只读详情态</h3>
+              <span class="tag green">已赢单</span>
+            </div>
+            <div class="status-stack">
+              <div class="status-line">
+                <strong>基础信息</strong>
+                <span>允许查看客户、业务类型、联系人、合同金额和历史进度。</span>
+              </div>
+              <div class="status-line">
+                <strong>进度跟踪</strong>
+                <span>不可新增、编辑或删除，只保留历史记录。</span>
+              </div>
+              <div class="status-line">
+                <strong>状态流转</strong>
+                <span>不可调整阶段、退回公海、分配、回收、转移或再次标记赢单/流失。</span>
+              </div>
+            </div>
+            <div class="drawer-actions">
+              <button class="btn disabled" type="button">新增跟踪</button>
+              <button class="btn disabled" type="button">阶段调整</button>
+              <button class="btn disabled" type="button">退回公海</button>
+              <button class="btn disabled" type="button">转移线索</button>
+            </div>
+          </article>
+
+          <article class="state-card">
+            <div class="state-card-head">
+              <h3>赢单 / 流失弹窗</h3>
+              <span class="tag purple">Modal</span>
+            </div>
+            <div class="dialog-preview">
+              <div class="dialog-head">
+                <span>标记赢单</span>
+                <span class="tag blue">生成合同记录</span>
+              </div>
+              <div class="dialog-body">
+                <div class="form-grid">
+                  <div class="form-row">
+                    <label>合同金额</label>
+                    <div class="mock-input">386,000.00 元</div>
+                  </div>
+                  <div class="form-row">
+                    <label>签订日期</label>
+                    <div class="mock-input">2026-05-26</div>
+                  </div>
+                  <div class="form-row full">
+                    <label>流失原因样例</label>
+                    <div class="mock-input">价格过高 / 选择竞品 / 无明确需求 / 联系不上 / 其他</div>
+                  </div>
+                </div>
+                <div class="alert info">
+                  赢单后线索进入结束状态并生成合同记录；流失时必须选择流失原因，可填写说明。
+                </div>
+              </div>
+              <div class="dialog-actions">
+                <button class="btn" type="button">取消</button>
+                <button class="btn primary" type="button">确认提交</button>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <article class="state-card">
+          <div class="state-card-head">
+            <h3>角色与状态操作矩阵</h3>
+            <span class="tag blue">权限入口仅作体验控制</span>
+          </div>
+          <div class="status-stack">
+            <div class="status-line">
+              <strong>Admin</strong>
+              <span>可查看全量客户、线索、进度、合同和日志；可分配、回收、转移公海或未结束线索。</span>
+            </div>
+            <div class="status-line">
+              <strong>Sales</strong>
+              <span>可搜索全量客户主体；可认领公海线索；只能查看本人线索完整详情和公海脱敏信息。</span>
+            </div>
+            <div class="status-line">
+              <strong>公海线索</strong>
+              <span>未结束且无归属时可认领或由 Admin 分配；并发认领以后端返回结果为准。</span>
+            </div>
+            <div class="status-line">
+              <strong>已结束线索</strong>
+              <span>所有角色均只读；前端禁用入口，后端仍必须返回 LEAD_ENDED_READONLY 兜底。</span>
+            </div>
+          </div>
+          <div class="component-note" aria-label="Arco 组件映射">
+            <span class="tag blue">Table</span>
+            <span class="tag green">Tag</span>
+            <span class="tag purple">Drawer</span>
+            <span class="tag orange">Modal</span>
+            <span class="tag blue">Form</span>
+            <span class="tag green">Select</span>
+            <span class="tag purple">InputNumber</span>
+            <span class="tag orange">Timeline</span>
+            <span class="tag blue">Descriptions</span>
+            <span class="tag red">Alert</span>
+          </div>
+        </article>
       </section>
     </main>
 
