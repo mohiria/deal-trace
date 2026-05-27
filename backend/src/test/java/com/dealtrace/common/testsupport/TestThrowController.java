@@ -28,6 +28,11 @@ public class TestThrowController {
         return payload.value();
     }
 
+    @GetMapping("/protected")
+    public String protectedEndpoint() {
+        return "ok";
+    }
+
     public record Payload(@NotBlank String value) {
     }
 }

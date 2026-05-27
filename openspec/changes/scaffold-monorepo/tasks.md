@@ -23,15 +23,15 @@
 
 ## 5. JWT 骨架 + Spring Security（platform-foundation 需求 1 的 UNAUTHORIZED 分支）
 
-- [ ] 5.1 写测试 `SecurityScaffoldTest`：在测试 profile 中注册一个仅在测试加载的 `/api/test/protected` 端点（默认要求认证）；通过 `MockMvc` 不带 `Authorization` 头请求该端点，断言返回 HTTP 401 + `code=UNAUTHORIZED` + `data=null` + 响应体不含 stack（Red）。
-- [ ] 5.2 实现 `com.dealtrace.security.JwtAuthenticationFilter`（继承 `OncePerRequestFilter`）：从 `Authorization` 头读取 `Bearer <token>`，本 change 中 token 解析逻辑留空（不抛错、不验证签名），调用 `filterChain.doFilter()` 放行；在 java doc 中明确标注"完整 token 解析由 auth-account spec 实现"。
-- [ ] 5.3 实现 `com.dealtrace.security.JwtAuthenticationEntryPoint`（实现 `AuthenticationEntryPoint`）：在 commence 时写出 `ApiResponse.error(UNAUTHORIZED, "未认证或认证已过期")` 的 JSON 响应，HTTP 状态码 401。
-- [ ] 5.4 实现 `com.dealtrace.security.SecurityConfig`（`@EnableWebSecurity`）：禁用 CSRF；`SessionCreationPolicy.STATELESS`；放行 `/api/health`；其余路径要求认证；注册 `JwtAuthenticationFilter` 于 `UsernamePasswordAuthenticationFilter` 之前；配置 `AuthenticationEntryPoint` 为 §5.3 的 bean。使 §5.1 测试 Green。
+- [x] 5.1 写测试 `SecurityScaffoldTest`：在测试 profile 中注册一个仅在测试加载的 `/api/test/protected` 端点（默认要求认证）；通过 `MockMvc` 不带 `Authorization` 头请求该端点，断言返回 HTTP 401 + `code=UNAUTHORIZED` + `data=null` + 响应体不含 stack（Red）。
+- [x] 5.2 实现 `com.dealtrace.security.JwtAuthenticationFilter`（继承 `OncePerRequestFilter`）：从 `Authorization` 头读取 `Bearer <token>`，本 change 中 token 解析逻辑留空（不抛错、不验证签名），调用 `filterChain.doFilter()` 放行；在 java doc 中明确标注"完整 token 解析由 auth-account spec 实现"。
+- [x] 5.3 实现 `com.dealtrace.security.JwtAuthenticationEntryPoint`（实现 `AuthenticationEntryPoint`）：在 commence 时写出 `ApiResponse.error(UNAUTHORIZED, "未认证或认证已过期")` 的 JSON 响应，HTTP 状态码 401。
+- [x] 5.4 实现 `com.dealtrace.security.SecurityConfig`（`@EnableWebSecurity`）：禁用 CSRF；`SessionCreationPolicy.STATELESS`；放行 `/api/health`；其余路径要求认证；注册 `JwtAuthenticationFilter` 于 `UsernamePasswordAuthenticationFilter` 之前；配置 `AuthenticationEntryPoint` 为 §5.3 的 bean。使 §5.1 测试 Green。
 
 ## 6. 健康检查端点（platform-foundation 需求 3）
 
-- [ ] 6.1 写 `HealthControllerTest`：匿名（无 `Authorization` 头）GET `/api/health`，断言 HTTP 200 + `code=SUCCESS` + `data` 为非 null 对象且至少含一个表示存活的字段（如 `status=UP`）（Red）。
-- [ ] 6.2 实现 `com.dealtrace.controller.HealthController`：`@RestController` + `@GetMapping("/health")` 返回 `ApiResponse.ok(Map.of("status", "UP"))`。使 §6.1 测试 Green。
+- [x] 6.1 写 `HealthControllerTest`：匿名（无 `Authorization` 头）GET `/api/health`，断言 HTTP 200 + `code=SUCCESS` + `data` 为非 null 对象且至少含一个表示存活的字段（如 `status=UP`）（Red）。
+- [x] 6.2 实现 `com.dealtrace.controller.HealthController`：`@RestController` + `@GetMapping("/health")` 返回 `ApiResponse.ok(Map.of("status", "UP"))`。使 §6.1 测试 Green。
 
 ## 7. 多事务测试基类（供 bootstrap-dealtrace-mvp 复用）
 

@@ -109,6 +109,51 @@
 
 继里程碑 1 的 Flyway 模块化教训之后，本里程碑再次撞到 Spring Boot 4 测试 autoconfig 拆分：**`spring-boot-starter-test` 不再包含 MockMvc 相关自动配置，需要按 main starter 对应加 test starter**（如 `spring-boot-starter-webmvc-test`）。这条同样适用于后续 §5 SecurityScaffoldTest / §6 HealthControllerTest——同一 pom 已加 starter，后续不会再撞。
 
+## 里程碑 3：JWT 骨架 + Spring Security + Health 端点
+
+### Task §5 — JWT 骨架 + Spring Security（platform-foundation R1 UNAUTHORIZED 分支）
+
+#### 合法 Red
+
+- 命令：`mvn -B -Dtest=SecurityScaffoldTest test`
+- 结果：HTTP 401（spring-boot-starter-security 默认 Basic Auth 给的），但响应体为空（无 GlobalExceptionHandler 注册、无自定义 AuthenticationEntryPoint）
+- 断言失败：`No value at JSON path "$.code"`（响应体 `Body =` 为空）
+- 性质：业务行为缺失（无统一信封），断言失败属预期，**合法 Red**
+
+#### Green
+
+- 命令：`mvn -B -Dtest=SecurityScaffoldTest test` → 全套 `mvn -B test`（regression）
+- 结果：`Tests run: 1, Failures: 0` → 全套 `Tests run: 5, Failures: 0`，BUILD SUCCESS
+- 行为证据：未带 `Authorization` 头访问 `/test/protected` → HTTP 401 + `code=UNAUTHORIZED` + `message=未认证或认证已过期` + `data=null` + 响应体不含 `AuthenticationException` / `at com.dealtrace` / `stacktrace` / `"trace"`
+- 覆盖证据：
+  - `backend/src/main/java/com/dealtrace/security/JwtAuthenticationFilter.java`（OncePerRequestFilter，token 解析占位）
+  - `backend/src/main/java/com/dealtrace/security/JwtAuthenticationEntryPoint.java`（写出 ApiResponse 信封 JSON）
+  - `backend/src/main/java/com/dealtrace/security/SecurityConfig.java`（CSRF disable / STATELESS / `/health` permitAll / 其余 authenticated / Filter 注册）
+  - `backend/src/test/java/com/dealtrace/security/SecurityScaffoldTest.java#unauthenticatedAccessReturnsUnifiedUnauthorizedEnvelope`
+  - `backend/src/test/java/com/dealtrace/common/testsupport/TestThrowController.java`（追加 `/protected` 端点）
+
+#### Warning（非阻塞）
+
+- `UserDetailsServiceAutoConfiguration` 在启动时生成 `Using generated security password: ...`：因 `spring-boot-starter-security` 默认装配 inMemoryUserDetailsManager，SecurityConfig 未显式排除该 autoconfig。本 change 不接入真实用户加载，安全行为已由自定义 `JwtAuthenticationFilter` + `EntryPoint` 接管，启动日志噪声不影响行为契约；auth-account spec 引入真实 `UserDetailsService` bean 后自动消失，无需现在处置。
+
+### Task §6 — Health 端点（platform-foundation R3）
+
+#### 合法 Red
+
+- 命令：`mvn -B -Dtest=HealthControllerTest test`
+- 结果：HTTP 500（无 `/health` controller → DispatcherServlet 抛 NoHandlerFoundException 等 → GlobalExceptionHandler 兜底为 `INTERNAL_ERROR`）
+- 断言失败：`Status expected:<200> but was:<500>`，响应体 `{"code":"INTERNAL_ERROR","message":"服务器内部错误","data":null}`
+- 性质：业务行为缺失（无 Health 控制器），断言失败属预期，**合法 Red**（兜底链路已生效，但具体业务行为未落地）
+
+#### Green
+
+- 命令：全套 `mvn -B test`
+- 结果：`Tests run: 6, Failures: 0, Errors: 0, Skipped: 0`，BUILD SUCCESS
+- 行为证据：匿名 GET `/health` → HTTP 200 + `code=SUCCESS` + `data.status=UP` + `message=OK`
+- 覆盖证据：
+  - `backend/src/main/java/com/dealtrace/controller/HealthController.java`
+  - `backend/src/test/java/com/dealtrace/controller/HealthControllerTest.java#anonymousGetHealthReturnsSuccessEnvelopeWithStatusUp`
+
 ## 剩余风险与后续工作（持续追加）
 
 - Mockito self-attaching JVM agent 警告：Mockito / Java 24 兼容性提示，目前不影响功能；后续里程碑如需更精细的 mock 行为，再按 follow-up 在 pom.xml 注册 `byte-buddy-agent`。
