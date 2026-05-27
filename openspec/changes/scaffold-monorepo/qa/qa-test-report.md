@@ -154,6 +154,29 @@
   - `backend/src/main/java/com/dealtrace/controller/HealthController.java`
   - `backend/src/test/java/com/dealtrace/controller/HealthControllerTest.java#anonymousGetHealthReturnsSuccessEnvelopeWithStatusUp`
 
+## 里程碑 4：多事务测试基类
+
+### Task §7 — MultiTransactionalIntegrationTest + PoC
+
+#### 设计取舍
+
+- 不属于 platform-foundation 业务行为 spec，但是后续 capability（认领并发、Outbox、流水插入与外部状态依赖）必须依赖的"跨事务测试支撑"，因此基类本体走"实现先行 + PoC 验证清理逻辑"路线，而非业务行为 TDD。
+- `@Transactional(propagation = NOT_SUPPORTED)` 让测试方法不被外层事务包裹，子类可以多次真实 commit；代价是必须显式声明 `tablesToTruncate()` 让基类在 @AfterEach 中清理。
+- TRUNCATE 之间临时关 FK_CHECKS 避免父子表清理顺序敏感，try/finally 保证清理失败也会恢复 FK 检查。
+
+#### Green 证据
+
+- 命令：`mvn -B -Dtest=MultiTransactionalBasePoCTest test` → 全套 `mvn -B test`
+- 结果：`Tests run: 2, Failures: 0` → 全套 `Tests run: 8, Failures: 0`，BUILD SUCCESS
+- 验证语义：`MultiTransactionalBasePoCTest` 用 `@TestMethodOrder(OrderAnnotation.class)` 强制 A→B 顺序：
+  - `methodAInsertsAndCommits` 在 `truncate_poc` 真实 INSERT 一行，自检 `COUNT(*) = 1`（说明 NOT_SUPPORTED 下 JdbcTemplate 自动提交生效）
+  - `methodBSeesEmptyTableProvingAfterEachTruncated` 起手即查 `COUNT(*) = 0`（说明 A 之后的 @AfterEach 真的 TRUNCATE 掉了那行）
+- 覆盖证据：
+  - `backend/src/test/java/com/dealtrace/common/MultiTransactionalIntegrationTest.java`
+  - `backend/src/test/java/com/dealtrace/common/MultiTransactionalBasePoCTest.java#methodAInsertsAndCommits`
+  - `backend/src/test/java/com/dealtrace/common/MultiTransactionalBasePoCTest.java#methodBSeesEmptyTableProvingAfterEachTruncated`
+- Side effect：测试结束后 `@AfterAll` DROP `truncate_poc`，不污染 dealtrace schema。
+
 ## 剩余风险与后续工作（持续追加）
 
 - Mockito self-attaching JVM agent 警告：Mockito / Java 24 兼容性提示，目前不影响功能；后续里程碑如需更精细的 mock 行为，再按 follow-up 在 pom.xml 注册 `byte-buddy-agent`。

@@ -35,8 +35,8 @@
 
 ## 7. 多事务测试基类（供 bootstrap-dealtrace-mvp 复用）
 
-- [ ] 7.1 实现抽象基类 `backend/src/test/java/com/dealtrace/common/MultiTransactionalIntegrationTest.java`：标 `@SpringBootTest`、`@Transactional(propagation = NOT_SUPPORTED)`；提供 `abstract Set<String> tablesToTruncate()`；`@AfterEach` 实现关 FK 检查 → 按集合 TRUNCATE 各表 → 开 FK 检查。
-- [ ] 7.2 写 `MultiTransactionalBasePoCTest`（继承 §7.1 基类）：在 V1 baseline 之上临时建一张 `truncate_poc` 表（migration 走 `db/migration/test/` 路径或测试代码 `JdbcTemplate.execute("CREATE TABLE ... IF NOT EXISTS")`），方法 A 真实 INSERT + commit，方法 B 立即查询断言表为空；目的：验证 `@AfterEach` 真的清掉了方法 A 留下的数据。测试结束后 DROP 临时表。
+- [x] 7.1 实现抽象基类 `backend/src/test/java/com/dealtrace/common/MultiTransactionalIntegrationTest.java`：标 `@SpringBootTest`、`@Transactional(propagation = NOT_SUPPORTED)`；提供 `abstract Set<String> tablesToTruncate()`；`@AfterEach` 实现关 FK 检查 → 按集合 TRUNCATE 各表 → 开 FK 检查。
+- [x] 7.2 写 `MultiTransactionalBasePoCTest`（继承 §7.1 基类）：在 V1 baseline 之上临时建一张 `truncate_poc` 表（migration 走 `db/migration/test/` 路径或测试代码 `JdbcTemplate.execute("CREATE TABLE ... IF NOT EXISTS")`），方法 A 真实 INSERT + commit，方法 B 立即查询断言表为空；目的：验证 `@AfterEach` 真的清掉了方法 A 留下的数据。测试结束后 DROP 临时表。
 
 ## 8. 前端项目骨架（documented non-TDD exception）
 
