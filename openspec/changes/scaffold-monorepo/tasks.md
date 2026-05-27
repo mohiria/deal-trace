@@ -17,9 +17,9 @@
 
 ## 4. API 响应信封 + 全局异常处理（platform-foundation 需求 1 & 2）
 
-- [ ] 4.1 写 `GlobalExceptionHandlerTest`：构造一个仅在测试 profile 加载的 `TestThrowController`，分别提供端点 `/api/test/validation-error`（抛 `MethodArgumentNotValidException` 等价语义异常）和 `/api/test/internal-error`（抛 `RuntimeException`）；通过 `MockMvc` 断言前者返回 HTTP 400 + `code=VALIDATION_ERROR` + `data=null` + 响应体不含 stack trace 字段；后者返回 HTTP 500 + `code=INTERNAL_ERROR` + 响应体不泄漏异常类名 / 堆栈 / SQL（Red）。
-- [ ] 4.2 实现 `com.dealtrace.common.ApiResponse<T>` record（字段 `code` `message` `data`，提供 `ok(...)` / `error(...)` 静态工厂）和 `ErrorCode` 枚举（含 `SUCCESS` / `VALIDATION_ERROR` / `UNAUTHORIZED` / `FORBIDDEN` / `NOT_FOUND` / `INTERNAL_ERROR` 六项）。
-- [ ] 4.3 实现 `com.dealtrace.common.GlobalExceptionHandler`（`@RestControllerAdvice`）：分别处理参数校验异常（→ 400 + VALIDATION_ERROR）、`AccessDeniedException`（→ 403 + FORBIDDEN）、`NoHandlerFoundException`（→ 404 + NOT_FOUND）、兜底 `Exception.class`（→ 500 + INTERNAL_ERROR，日志记录完整 stack、响应体不含 stack）使 §4.1 全部测试 Green。
+- [x] 4.1 写 `GlobalExceptionHandlerTest`：构造一个仅在测试 profile 加载的 `TestThrowController`，分别提供端点 `/api/test/validation-error`（抛 `MethodArgumentNotValidException` 等价语义异常）和 `/api/test/internal-error`（抛 `RuntimeException`）；通过 `MockMvc` 断言前者返回 HTTP 400 + `code=VALIDATION_ERROR` + `data=null` + 响应体不含 stack trace 字段；后者返回 HTTP 500 + `code=INTERNAL_ERROR` + 响应体不泄漏异常类名 / 堆栈 / SQL（Red）。
+- [x] 4.2 实现 `com.dealtrace.common.ApiResponse<T>` record（字段 `code` `message` `data`，提供 `ok(...)` / `error(...)` 静态工厂）和 `ErrorCode` 枚举（含 `SUCCESS` / `VALIDATION_ERROR` / `UNAUTHORIZED` / `FORBIDDEN` / `NOT_FOUND` / `INTERNAL_ERROR` 六项）。
+- [x] 4.3 实现 `com.dealtrace.common.GlobalExceptionHandler`（`@RestControllerAdvice`）：分别处理参数校验异常（→ 400 + VALIDATION_ERROR）、`AccessDeniedException`（→ 403 + FORBIDDEN）、`NoHandlerFoundException`（→ 404 + NOT_FOUND）、兜底 `Exception.class`（→ 500 + INTERNAL_ERROR，日志记录完整 stack、响应体不含 stack）使 §4.1 全部测试 Green。
 
 ## 5. JWT 骨架 + Spring Security（platform-foundation 需求 1 的 UNAUTHORIZED 分支）
 

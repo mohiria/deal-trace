@@ -332,7 +332,10 @@ Domain / Service / Mapper 子包在 scaffold 留空，由 `bootstrap-dealtrace-m
 
 - **[R1] 测试和联调共用单一 `dealtrace` 库，多事务测试残留可能污染联调视野** → 缓解：默认 rollback；多事务测试基类强制 `@AfterEach TRUNCATE`；单人项目能识别残留数据；若长期扰心，加一台独立 MySQL 实例专给联调（同名 `dealtrace`、不同 host）。
 - **[R2] 测试连云端 MySQL 网络延迟显著拉慢 TDD Red-Green 反馈环** → 缓解：本 change 不解决；接受 MVP 期慢一些；若反馈环长到难忍，未来加 Docker 本地 mysql 容器作为可选 profile（`application-local-fast.yml`），不进 scaffold 范围。
-- **[R3] Spring Boot 4.0 + MyBatis Plus 3.5.16 是较新组合，外围库（如 `springdoc-openapi`、监控）可能尚未官方支持 SB4** → 缓解：scaffold 不引入这些外围库；后续按需逐项验证；遇到不兼容 Conflict Gate 升级解决。
+- **[R3] Spring Boot 4 模块化导致依赖配置必须按新模块边界调整**（apply 阶段实测的两类坑，记入此处供 bootstrap-dealtrace-mvp 参考）：
+  - **R3a** `flyway-core` / `liquibase-core` 等数据库 migration 直接依赖**不再触发** autoconfig——必须换为对应 starter `spring-boot-starter-flyway` / `spring-boot-starter-liquibase`。本 change 的 pom.xml 已修正。
+  - **R3b** `spring-boot-starter-test` **不再包含** MockMvc 等 servlet 层测试 autoconfig——使用 `@AutoConfigureMockMvc`、`@WebMvcTest` 等注解时必须额外加 `spring-boot-starter-webmvc-test`（test scope），且注解所在包从 `org.springframework.boot.test.autoconfigure.web.servlet` 迁到 `org.springframework.boot.webmvc.test.autoconfigure`。
+  - **R3c**（推论）外围库（如 `springdoc-openapi`、监控）可能尚未官方支持 SB4——scaffold 不引入这些外围库；后续按需逐项验证；遇到不兼容触发 Requirement Conflict Gate 升级解决。
 - **[R4] `SELECT 1` 作为 Flyway baseline 不优雅**，但在不创建业务表的约束下是唯一合法 SQL → 缓解：可改为创建一个临时表再删，但收益不大；保持简单。
 - **[R5] JWT 骨架放在 scaffold、实际验证逻辑放在 auth-account，跨 change 协作可能造成"骨架与实现脱节"** → 缓解：scaffold 的 platform-foundation spec 只规定"未认证返回 UNAUTHORIZED"行为契约；auth-account spec 实现 token 解析时由后者负责完整测试覆盖。
 

@@ -65,9 +65,53 @@
 - Flyway 11.14.1 警告 `Using MySQL 8.4 which is newer than the version Flyway has been verified with. The latest verified version of MySQL is 8.1.`——Flyway 商业版的 MySQL 8.4 验证状态滞后；Community 版本目前仍能在 8.4 上正确工作（验证 ✓）
 - Mockito self-attaching JVM 警告——Mockito 4 / Java 24 兼容性提示，不影响功能；后续可作为 follow-up 在 pom.xml 注册 byte-buddy-agent
 
+## 里程碑 2：API 响应信封 + 全局异常处理
+
+### Task §4.1 — `GlobalExceptionHandlerTest` + `TestThrowController`（Red）
+
+**伪 Red（setup failure）：`@AutoConfigureMockMvc` 编译不通过**
+
+- 失败原因：Spring Boot 4 把测试 autoconfig 进一步拆分，`@AutoConfigureMockMvc` 从 `org.springframework.boot.test.autoconfigure.web.servlet` 迁到 `org.springframework.boot.webmvc.test.autoconfigure`；且需要新 starter `spring-boot-starter-webmvc-test`（test scope）
+- 失败摘要：`cannot find symbol: class AutoConfigureMockMvc`
+- 性质：**setup / compilation failure**，**不计**合法 Red
+- 处置：pom.xml 加 `spring-boot-starter-webmvc-test` test scope；GlobalExceptionHandlerTest 把 import 改为新包路径
+
+**合法 Red（业务行为缺失）**
+
+- 命令：`mvn -B -Dtest=GlobalExceptionHandlerTest test`
+- 结果：
+  - `internalErrorReturnsEnvelopeWithoutLeakingDetails` Error：`Servlet Request processing failed: java.lang.RuntimeException: intentional runtime failure for INTERNAL_ERROR test`——`RuntimeException` 未被任何 handler 捕获，传播到 MockMvc 测试代码
+  - `validationErrorReturnsBadRequestEnvelope` Failure：`No value at JSON path "$.code"`（响应体为空，无 GlobalExceptionHandler 注册）
+- 性质：业务行为缺失（无 `GlobalExceptionHandler`），断言失败属预期，**合法 Red**
+
+### Task §4.2 / §4.3 — 实现 ApiResponse + ErrorCode + GlobalExceptionHandler（Green）
+
+- 命令：`mvn -B -Dtest=GlobalExceptionHandlerTest test` 后跟全套 `mvn -B test`（regression check）
+- 结果：
+  ```
+  Tests run: 2, Failures: 0, Errors: 0, Skipped: 0 -- GlobalExceptionHandlerTest
+  Tests run: 4, Failures: 0, Errors: 0, Skipped: 0 -- 全套
+  BUILD SUCCESS
+  ```
+- 行为证据：
+  - `internalErrorReturnsEnvelopeWithoutLeakingDetails`：500 + `code=INTERNAL_ERROR` + `message` 存在 + 响应体不含 `RuntimeException` / `java.lang` / `at com.dealtrace` / `stacktrace` / `"trace"` 任一子串 ✓
+  - `validationErrorReturnsBadRequestEnvelope`：400 + `code=VALIDATION_ERROR` + `message` 存在 ✓
+  - Regression：ConnectivitySmokeTest 2/2 仍 Green，无回归
+- 覆盖证据：
+  - `backend/src/main/java/com/dealtrace/common/ApiResponse.java`
+  - `backend/src/main/java/com/dealtrace/common/ErrorCode.java`
+  - `backend/src/main/java/com/dealtrace/common/GlobalExceptionHandler.java`
+  - `backend/src/test/java/com/dealtrace/common/GlobalExceptionHandlerTest.java#internalErrorReturnsEnvelopeWithoutLeakingDetails`
+  - `backend/src/test/java/com/dealtrace/common/GlobalExceptionHandlerTest.java#validationErrorReturnsBadRequestEnvelope`
+  - `backend/src/test/java/com/dealtrace/common/testsupport/TestThrowController.java`（test fixture）
+
+### 派生工程教训
+
+继里程碑 1 的 Flyway 模块化教训之后，本里程碑再次撞到 Spring Boot 4 测试 autoconfig 拆分：**`spring-boot-starter-test` 不再包含 MockMvc 相关自动配置，需要按 main starter 对应加 test starter**（如 `spring-boot-starter-webmvc-test`）。这条同样适用于后续 §5 SecurityScaffoldTest / §6 HealthControllerTest——同一 pom 已加 starter，后续不会再撞。
+
 ## 剩余风险与后续工作（持续追加）
 
-- design.md §R3 需要扩充一条：**Spring Boot 4 模块化导致 `flyway-core` / `liquibase-core` 等直接依赖不再触发 autoconfig，必须用对应 starter**——这条教训应反向写入 design.md 给 bootstrap-dealtrace-mvp 参考
-- Mockito self-attaching → 未来里程碑可能涉及，到时按 follow-up 处理
+- Mockito self-attaching JVM agent 警告：Mockito / Java 24 兼容性提示，目前不影响功能；后续里程碑如需更精细的 mock 行为，再按 follow-up 在 pom.xml 注册 `byte-buddy-agent`。
+- Flyway 11.14.1 对 MySQL 8.4 的"未验证"警告：Community 版本验证可正常工作，Community 升级到正式支持 8.4 前持续观察，无需现在处置。
 
-（里程碑 2-6 的证据将在对应阶段追加。）
+（里程碑 3-6 的证据将在对应阶段追加。）

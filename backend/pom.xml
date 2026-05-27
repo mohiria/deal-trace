@@ -86,10 +86,16 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Test -->
+        <!-- Test：Spring Boot 4 拆分测试依赖。spring-boot-starter-test 提供 JUnit/AssertJ/Mockito 基础设施；
+             spring-boot-starter-webmvc-test 提供 MockMvc 与 @AutoConfigureMockMvc 等 servlet 层测试自动配置 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
