@@ -136,7 +136,7 @@ profile 设计：
 spring:
   datasource:
     url: jdbc:mysql://${DB_HOST}:${DB_PORT:3306}/dealtrace?useUnicode=true&characterEncoding=utf8&useSSL=true&serverTimezone=Asia/Shanghai
-    username: ${DB_USERNAME}
+    username: ${DB_USER}
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
   flyway:
@@ -144,7 +144,7 @@ spring:
     baseline-on-migrate: false
 ```
 
-**环境变量**：`DB_HOST` / `DB_PORT` / `DB_USERNAME` / `DB_PASSWORD`。本地开发者用 `.env`（不入 git）或 IDE run config；CI 用 secrets。
+**环境变量**：`DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD`。本地开发者用 `.env`（不入 git）或 IDE run config；CI 用 secrets。
 
 `serverTimezone=Asia/Shanghai` 在 D3 的 URL 中显式声明——为 dashboard `今日`/`本月` 语义打底（tech-arch §9.1 推迟的时区策略，scaffold 阶段先固定服务端时区为东八区；最终业务规则仍由 `bootstrap-dealtrace-mvp` 的 dashboard spec 决定）。
 

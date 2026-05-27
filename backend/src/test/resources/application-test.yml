@@ -1,0 +1,9 @@
+spring:
+  config:
+    activate:
+      on-profile: test
+
+logging:
+  level:
+    com.dealtrace: DEBUG
+    org.springframework.test: INFO

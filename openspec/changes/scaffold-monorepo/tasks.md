@@ -1,19 +1,19 @@
 ## 1. QA 设计先行
 
-- [ ] 1.1 在 `openspec/changes/scaffold-monorepo/qa/lightweight-test-design.md` 中规划本 change 的全部测试设计：标注哪些任务走严格 Red-Green-Refactor（§3–§7、§9），哪些任务作为 documented non-TDD exceptions（§2 后端骨架、§8 前端骨架——验证方式 = build / compile 通过，无可断言的运行时行为）；记录每条 platform-foundation Requirement 的覆盖测试入口。
+- [x] 1.1 在 `openspec/changes/scaffold-monorepo/qa/lightweight-test-design.md` 中规划本 change 的全部测试设计：标注哪些任务走严格 Red-Green-Refactor（§3–§7、§9），哪些任务作为 documented non-TDD exceptions（§2 后端骨架、§8 前端骨架——验证方式 = build / compile 通过，无可断言的运行时行为）；记录每条 platform-foundation Requirement 的覆盖测试入口。
 
 ## 2. 后端项目骨架（documented non-TDD exception）
 
-- [ ] 2.1 在 `backend/` 创建 Maven 项目：`pom.xml` 含 Spring Boot 4.0.6 + Spring Security + `mybatis-plus-spring-boot4-starter` 3.5.16 + Flyway + MySQL Connector + `jjwt-api/impl/jackson` 0.12.x + JUnit Jupiter + Spring Boot Test 依赖；`groupId = com.dealtrace`，`artifactId = dealtrace-backend`，`java.version = 24`，`spring-boot-maven-plugin` 配 main class。
-- [ ] 2.2 创建 `backend/src/main/java/com/dealtrace/DealTraceApplication.java`（含 `@SpringBootApplication`）并建立 `common/` `security/` `controller/` 子包目录骨架（空目录用 `.gitkeep` 占位）。
-- [ ] 2.3 创建 `application.yml`（共享 DataSource URL `jdbc:mysql://${DB_HOST}:${DB_PORT:3306}/dealtrace`、`serverTimezone=Asia/Shanghai`、`server.servlet.context-path=/api`、Flyway 启用、`baseline-on-migrate=false`）、`application-local.yml`、`src/test/resources/application-test.yml`（test profile 复用同一 DataSource）。
-- [ ] 2.4 创建 `backend/src/main/resources/db/migration/V1__init.sql`，内容仅含一句 `SELECT 1;` 与一行注释说明"业务表 migration 由 bootstrap-dealtrace-mvp 落定"。
+- [x] 2.1 在 `backend/` 创建 Maven 项目：`pom.xml` 含 Spring Boot 4.0.6 + Spring Security + `mybatis-plus-spring-boot4-starter` 3.5.16 + Flyway + MySQL Connector + `jjwt-api/impl/jackson` 0.12.x + JUnit Jupiter + Spring Boot Test 依赖；`groupId = com.dealtrace`，`artifactId = dealtrace-backend`，`java.version = 24`，`spring-boot-maven-plugin` 配 main class。
+- [x] 2.2 创建 `backend/src/main/java/com/dealtrace/DealTraceApplication.java`（含 `@SpringBootApplication`）并建立 `common/` `security/` `controller/` 子包目录骨架（空目录用 `.gitkeep` 占位）。
+- [x] 2.3 创建 `application.yml`（共享 DataSource URL `jdbc:mysql://${DB_HOST}:${DB_PORT:3306}/dealtrace`、`serverTimezone=Asia/Shanghai`、`server.servlet.context-path=/api`、Flyway 启用、`baseline-on-migrate=false`）、`application-local.yml`、`src/test/resources/application-test.yml`（test profile 复用同一 DataSource）。
+- [x] 2.4 创建 `backend/src/main/resources/db/migration/V1__init.sql`，内容仅含一句 `SELECT 1;` 与一行注释说明"业务表 migration 由 bootstrap-dealtrace-mvp 落定"。
 
 ## 3. 数据库连通性 + 单事务测试基类（首次 Red-Green）
 
-- [ ] 3.1 实现抽象基类 `backend/src/test/java/com/dealtrace/common/IntegrationTest.java`：标 `@SpringBootTest`、`@Transactional`、`@Rollback`，无构造逻辑，仅供子类继承。
-- [ ] 3.2 写测试 `ConnectivitySmokeTest`（继承 `IntegrationTest`）：注入 `JdbcTemplate`，断言 `SELECT 1` 返回 `1`，并断言 `flyway_schema_history` 表存在且至少含一条 `V1` 记录。先验证 Red（未配置环境变量 / DataSource 时 Spring Context 启动失败属于 setup blocker，需先注入正确环境变量后 Red 应为业务断言失败）。
-- [ ] 3.3 调通 DataSource 环境变量注入（`DB_HOST` / `DB_USERNAME` / `DB_PASSWORD` 通过 IDE run config 或 `.env`），跑通 ConnectivitySmokeTest（Green）；在 `qa/qa-test-report.md` 中记录 Red 输出原文与 Green 后的 `mvn test` 摘要。
+- [x] 3.1 实现抽象基类 `backend/src/test/java/com/dealtrace/common/IntegrationTest.java`：标 `@SpringBootTest`、`@Transactional`、`@Rollback`，无构造逻辑，仅供子类继承。
+- [x] 3.2 写测试 `ConnectivitySmokeTest`（继承 `IntegrationTest`）：注入 `JdbcTemplate`，断言 `SELECT 1` 返回 `1`，并断言 `flyway_schema_history` 表存在且至少含一条 `V1` 记录。先验证 Red（未配置环境变量 / DataSource 时 Spring Context 启动失败属于 setup blocker，需先注入正确环境变量后 Red 应为业务断言失败）。
+- [x] 3.3 调通 DataSource 环境变量注入（`DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` 通过用户级环境变量或 IDE run config），跑通 ConnectivitySmokeTest（Green）；在 `qa/qa-test-report.md` 中记录 Red 输出原文与 Green 后的 `mvn test` 摘要。
 
 ## 4. API 响应信封 + 全局异常处理（platform-foundation 需求 1 & 2）
 

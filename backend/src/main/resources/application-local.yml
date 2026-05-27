@@ -1,0 +1,9 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+
+logging:
+  level:
+    org.springframework.web: DEBUG
+    org.flywaydb: INFO

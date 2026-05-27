@@ -1,3 +1,155 @@
-.obsidian
-.claude
+# ============================================================================
+# 操作系统临时文件
+# ============================================================================
 .DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+.Trash-*
+.directory
+
+# ============================================================================
+# 编辑器 / IDE 配置
+# ============================================================================
+
+# JetBrains（IntelliJ IDEA / WebStorm / DataGrip）
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Visual Studio Code（如有需要共享的 launch.json / tasks.json，单独 git add -f）
+.vscode/
+
+# Eclipse / Spring Tool Suite
+.classpath
+.project
+.settings/
+.factorypath
+.apt_generated/
+.springBeans
+.sts4-cache/
+
+# Vim / Emacs
+*.swp
+*.swo
+*~
+\#*\#
+.\#*
+
+# Cursor / Windsurf 等基于 VS Code 的编辑器
+.cursor/
+.windsurf/
+
+# Obsidian 笔记缓存（与本项目无关的工作流文件）
+.obsidian
+
+# ============================================================================
+# Claude Code 私有产物（项目级 .claude/ 整体忽略）
+# 已 commit 的 .claude/commands/ 与 .claude/skills/ 保留 tracked；
+# 此后该目录内的本地变化不再入 git。
+# ============================================================================
+.claude
+
+# ============================================================================
+# 环境变量与密钥（关键：阻止凭证 / 私钥意外提交）
+# ============================================================================
+.env
+.env.local
+.env.*.local
+.env.development
+.env.test
+.env.production
+
+# 私钥 / 证书 / keystore
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+*.jks
+*.crt
+secrets/
+
+# Spring Boot 本地秘钥配置（约定命名，便于个人覆盖共享配置而不入 git）
+application-*-secret.yml
+application-*-secret.yaml
+application-*-secret.properties
+
+# ============================================================================
+# Java / Maven / Gradle 构建产物
+# ============================================================================
+target/
+build/
+out/
+bin/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+
+# Maven Wrapper（如启用，仅忽略下载的 jar，保留 mvnw 脚本本身）
+.mvn/wrapper/maven-wrapper.jar
+
+# JVM 崩溃产物
+hs_err_pid*
+replay_pid*
+
+# ============================================================================
+# Node.js / 前端工具链
+# ============================================================================
+node_modules/
+.pnpm-store/
+.pnp.*
+.yarn/cache/
+.yarn/install-state.gz
+
+# 构建产物
+dist/
+dist-ssr/
+.vite/
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+.output/
+.svelte-kit/
+
+# 包管理器调试日志
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# 本地覆盖配置（Vite 等约定 *.local 后缀，用于个人不入 git 的覆盖）
+*.local
+
+# ============================================================================
+# 测试 / 覆盖率产物
+# ============================================================================
+coverage/
+*.lcov
+.nyc_output/
+.pytest_cache/
+__pycache__/
+
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# ============================================================================
+# 日志与临时文件
+# ============================================================================
+*.log
+*.log.*
+*.tmp
+*.bak
+*.orig
+*.rej
+tmp/
+.tmp/
