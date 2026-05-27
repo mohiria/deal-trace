@@ -65,7 +65,8 @@ QA 设计 / 报告产物入 `openspec/changes/<change>/qa/`（用 `.claude/skill
 - **Dashboard 归属语义双轨**（PRD §7.12）：存量指标（"今日新增"）用**当前归属**；事件指标（"本月赢单金额""本月流失率"）用**事件发生时归属**。本月流失率分母为 0 显示 `--`，不是 `0%`。
 - **认证由部署配置注入**（PRD §7.1）：无自助注册；初始 Admin 邮箱 + 密码由部署配置提供。停用 Sales 不会自动转交线索——Admin 必须手动回收或转移。
 - **禁止引入 Tailwind**：与 Arco Design Vue 主题体系冲突（tech-arch §10 明文禁止）。
-- **集成测试用 Testcontainers + 真 MySQL 8.4**（tech-arch §12）：Flyway 迁移敏感路径必须跑真库，不准用 H2 也不准 mock。
+- **集成测试用真 MySQL 8.4**（tech-arch §12）：Flyway 迁移敏感路径必须跑真库，不准用 H2 也不准 mock。具体编排方式（连接配置、测试基类隔离策略）在 scaffold 的 design.md 中固定。
+- **schema 命名禁带环境标签**：database 永远叫 `dealtrace`，表 / 列 / 索引 / 外键按业务命名；所有环境（联调、自动化测试、未来生产）共用同一份 schema 设计，仅靠 `spring.profiles.active` + 连接配置切换实例。
 - **金额用精确数值类型**：不用 float / double。
 
 ## 找东西去哪里
