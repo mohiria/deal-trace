@@ -53,10 +53,10 @@
 
 ## 10. QA 收尾产物
 
-- [ ] 10.1 在 `openspec/changes/scaffold-monorepo/qa/regression-impact-analysis.md` 中说明：本 change 为新增、无现有代码回归范围；下游影响 = `bootstrap-dealtrace-mvp` 的所有 capability 都依赖本 change 落定的 ApiResponse / ErrorCode / SecurityConfig / 测试基类 / Flyway 管道。
-- [ ] 10.2 在 `openspec/changes/scaffold-monorepo/qa/qa-test-report.md` 中汇总：每个 §3–§9 任务的 Red 命令输出原文 + Green 后的 `mvn test` / `pnpm test` 摘要、覆盖证据；§2、§8 的 documented non-TDD exception 记录"验证方式 = `mvn compile` / `pnpm build` 通过"。
-- [ ] 10.3 运行 `node .claude/skills/vibe-coding-qa/scripts/qa_artifacts.mjs check lightweight-test-design openspec/changes/scaffold-monorepo/qa/lightweight-test-design.md`，同样对 `regression-impact-analysis` 和 `qa-test-report` 各跑一次；解决所有 FAIL / WARN。
+- [x] 10.1 在 `openspec/changes/scaffold-monorepo/qa/regression-impact-analysis.md` 中说明：本 change 为新增、无现有代码回归范围；下游影响 = `bootstrap-dealtrace-mvp` 的所有 capability 都依赖本 change 落定的 ApiResponse / ErrorCode / SecurityConfig / 测试基类 / Flyway 管道。
+- [x] 10.2 在 `openspec/changes/scaffold-monorepo/qa/qa-test-report.md` 中汇总：每个 §3–§9 任务的 Red 命令输出原文 + Green 后的 `mvn test` / `pnpm test` 摘要、覆盖证据；§2、§8 的 documented non-TDD exception 记录"验证方式 = `mvn compile` / `pnpm build` 通过"。
+- [x] 10.3 运行 `node .claude/skills/vibe-coding-qa/scripts/qa_artifacts.mjs check lightweight-test-design openspec/changes/scaffold-monorepo/qa/lightweight-test-design.md`，同样对 `regression-impact-analysis` 和 `qa-test-report` 各跑一次；解决所有 FAIL / WARN。（注：`regression-impact-analysis` 模板未在 checker 支持列表中，跳过其 checker 调用，artifact 仍按 templates/regression-impact-analysis.md 结构落地）
 
 ## 11. CI 接入（follow-up placeholder，本 change 不实施）
 
-- [ ] 11.1 在 `openspec/changes/scaffold-monorepo/qa/qa-test-report.md` 的"剩余风险与后续工作"小节中记录 CI 接入决策：未来用 Testcontainers + CI runner 内置 Docker，database 名仍叫 `dealtrace`，不引入环境标签命名；接入时机延后到 `bootstrap-dealtrace-mvp` 完成或本人主动需要 CI 时；本 change **不**实施 CI 接入。
+- [x] 11.1 在 `openspec/changes/scaffold-monorepo/qa/qa-test-report.md` 的"剩余风险与后续工作"小节中记录 CI 接入决策：未来用 Testcontainers + CI runner 内置 Docker，database 名仍叫 `dealtrace`，不引入环境标签命名；接入时机延后到 `bootstrap-dealtrace-mvp` 完成或本人主动需要 CI 时；本 change **不**实施 CI 接入。

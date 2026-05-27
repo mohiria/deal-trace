@@ -1,6 +1,136 @@
 # QA Test Report — scaffold-monorepo
 
-> 本报告随 apply 阶段每个里程碑追加；当前覆盖到 **里程碑 1**（Task §1、§2、§3）。
+## Conclusion
+
+- Overall result: PASS
+- Requirement / change ID: `scaffold-monorepo`
+- QA owner: 项目作者（单人开发）
+- Date: 2026-05-27
+- Summary: platform-foundation 全部 3 个 Requirement（统一响应信封 / 兜底异常 / 健康检查）以集成测试覆盖；Flyway 管道与跨事务测试基类以 PoC 覆盖；前端响应信封解析以 Vitest 单测覆盖。后端 8/8、前端单测 2/2 全部 Green，且对真 MySQL 8.4 执行 Flyway baseline。E2E smoke 配置完备但执行延后到本地联调，无业务回归风险。
+
+## Evidence Guide
+
+| Evidence type | What to record | Example |
+| --- | --- | --- |
+| Execution evidence | 命令、结果、报告路径 | `mvn -B test` BUILD SUCCESS Tests 8/0/0/0 |
+| Behavioral evidence | 断言所证明的行为 | 未带 Authorization 头访问受保护端点返回 401 + `code=UNAUTHORIZED` + 不泄漏 stack |
+| Coverage evidence | 项目相对路径的测试入口 | `backend/src/test/java/com/dealtrace/security/SecurityScaffoldTest.java#unauthenticatedAccessReturnsUnifiedUnauthorizedEnvelope` |
+
+## Scope
+
+| Area | In scope? | Notes |
+| --- | --- | --- |
+| Unit | Yes | 前端 `unwrapEnvelope` 信封解析单测 |
+| API/integration | Yes | 后端 `@SpringBootTest` + MockMvc + 真 MySQL 8.4 Flyway |
+| E2E | Deferred | Playwright 配置 + spec 就绪；执行延后到本地双 dev server 联调 |
+| Regression | Yes | 每个里程碑结束跑全套；本 change 为新增工程，无既存代码回归 |
+| Runtime QA validation | Yes | Flyway 首次对云 MySQL 8.4 实际 baseline 写入 |
+
+## Requirement Authority / Conflict Review
+
+无冲突。本 change 为首次落地 platform-foundation capability，无既存 spec / 测试 / 代码对应行为可比对。
+
+## TDD Summary
+
+| Test point | Source / authority | Red evidence | Red failure reason | Green evidence | Refactor / regression evidence | Coverage artifact | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Flyway 管道执行 + `SELECT 1` 连通 | design.md D5 Flyway baseline 决策 | `mvn -B test` Failure `Expecting actual: 0 to be greater than or equal to: 1`（`flyway_schema_history` 无 V1）边界情况 → 改 starter 后转合法 Red 不再触发；伪 Red 已记入下方里程碑 1 | 业务断言失败但根因是 SB4 模块化未触发 autoconfig | `mvn -B test` Tests 2/0/0/0；Flyway 实际 Migrating schema `dealtrace` to v1 | `mvn -B test` 全套后续每个里程碑回归 8/0/0/0 | `backend/src/test/java/com/dealtrace/ConnectivitySmokeTest.java#flywayHistoryContainsV1Baseline` | PASS |
+| platform-foundation R1 / R2 统一信封 + 兜底 500 不泄漏 stack | spec.md Requirement 1 + 2 | `mvn -B -Dtest=GlobalExceptionHandlerTest test` Failure `No value at JSON path "$.code"` + RuntimeException 未被处理 | 业务行为缺失（无 GlobalExceptionHandler） | 同命令 Tests 2/0/0/0；响应体含 `code=INTERNAL_ERROR`/`VALIDATION_ERROR`，不含 stack | 全套 4/0/0/0 | `backend/src/test/java/com/dealtrace/common/GlobalExceptionHandlerTest.java#internalErrorReturnsEnvelopeWithoutLeakingDetails` | PASS |
+| platform-foundation R1 UNAUTHORIZED 分支 | spec.md Requirement 1 | `mvn -B -Dtest=SecurityScaffoldTest test` Failure `No value at JSON path "$.code"`（401 但响应体为空） | 业务行为缺失（无 AuthenticationEntryPoint 写信封） | 同命令 Tests 1/0/0/0；401 + `code=UNAUTHORIZED` | 全套 5/0/0/0 | `backend/src/test/java/com/dealtrace/security/SecurityScaffoldTest.java#unauthenticatedAccessReturnsUnifiedUnauthorizedEnvelope` | PASS |
+| platform-foundation R3 健康检查 | spec.md Requirement 3 | `mvn -B -Dtest=HealthControllerTest test` Failure `Status expected:<200> but was:<500>`（兜底命中） | 业务行为缺失（无 `/health` controller） | 全套 6/0/0/0 | 后续里程碑回归 8/0/0/0 | `backend/src/test/java/com/dealtrace/controller/HealthControllerTest.java#anonymousGetHealthReturnsSuccessEnvelopeWithStatusUp` | PASS |
+| 前端响应信封 unwrap | platform-foundation R1 在前端的对偶 | `vitest run src/api/client.spec.ts` 1 failed `expected function to throw an error, but it didn't`（短路实现） | 业务行为缺失（短路实现不抛 ApiError） | `vitest run` Tests 2/2 passed | 同命令 | `frontend/src/api/client.spec.ts#unwrapEnvelope > throws ApiError carrying code and message when envelope is not SUCCESS` | PASS |
+| 多事务测试基类 @AfterEach 清理（基础设施 PoC） | design.md D8 测试隔离决策 | 不适用（基础设施 PoC，非业务行为 TDD） | — | `mvn -B -Dtest=MultiTransactionalBasePoCTest test` 2/2 passed；方法 A 提交 → @AfterEach TRUNCATE → 方法 B 见空表 | 全套 8/0/0/0 | `backend/src/test/java/com/dealtrace/common/MultiTransactionalBasePoCTest.java#methodBSeesEmptyTableProvingAfterEachTruncated` | PASS |
+
+## Non-TDD Exceptions
+
+| Scope | Reason strict TDD does not apply | Alternative validation | Residual risk |
+| --- | --- | --- | --- |
+| 后端 Maven 骨架（tasks §2） | 纯依赖声明 + 包结构，无运行时行为可断言 | `mvn -B -DskipTests compile` BUILD SUCCESS；`mvn dependency:list` 解析无冲突 | 低 |
+| 前端 Vite 骨架（tasks §8） | 纯脚手架 + 依赖声明，业务路由由后续 capability 落定 | `vue-tsc -b` 退出 0 + `vite build` BUILD SUCCESS | 低 |
+| 多事务测试基类（tasks §7） | 测试基础设施而非业务行为；PoC 验证清理逻辑 | `MultiTransactionalBasePoCTest` 强制方法顺序证明 @AfterEach 真清掉了上一方法的 commit | 低 |
+| Playwright smoke E2E（tasks §9.2） | 需双 dev server 并行启动 + 浏览器装包，CI 接入前不进自动化 | 配置 + spec 文件就绪；执行延后到本地联调手动 smoke | 中（dev proxy 配置未在自动化中验证） |
+
+## Tests Run
+
+| Layer | Test / suite | Command | Result | Evidence |
+| --- | --- | --- | --- | --- |
+| Unit | `frontend/src/api/client.spec.ts` | `./node_modules/.bin/vitest run`（在 `frontend/` 下） | PASS（2/2） | 里程碑 5 §9.1 Green 段 |
+| API/integration | backend 全套（`ConnectivitySmokeTest` + `GlobalExceptionHandlerTest` + `SecurityScaffoldTest` + `HealthControllerTest` + `MultiTransactionalBasePoCTest`） | `mvn -B test`（在 `backend/` 下） | PASS（8/0/0/0） | 各里程碑 Green 段 |
+| E2E | `frontend/tests/e2e/health.spec.ts` | `pnpm test:e2e`（需双 dev server + chromium） | DEFERRED | 里程碑 5 §9.2 |
+| Regression | backend 全套（每里程碑结束跑） | `mvn -B test` | PASS（最终 8/0/0/0） | 各里程碑 Green 段中"全套 N/N"行 |
+
+## Tests Not Run / Blockers
+
+| Test / scope | Reason not run | Exact blocker | Required owner action | Residual risk |
+| --- | --- | --- | --- | --- |
+| `frontend/tests/e2e/health.spec.ts` | DEFERRED | 需要并行启动 backend `mvn spring-boot:run` + frontend `pnpm dev` + 首次 `pnpm exec playwright install chromium` 装浏览器 | 本地联调阶段手动触发一次 smoke | dev proxy 配置 + chromium 网络栈未在自动化中验证；前后端契约已被 API 层覆盖，连通性是配置而非业务逻辑 |
+
+## Coverage Summary
+
+| Test point | Layer | Behavioral evidence | Coverage artifact | Status |
+| --- | --- | --- | --- | --- |
+| 数据库连通 + Flyway baseline | API/integration | `SELECT 1` 返回 1；`flyway_schema_history` 含 V1 success | `backend/src/test/java/com/dealtrace/ConnectivitySmokeTest.java` | COVERED |
+| 兜底异常映射为 INTERNAL_ERROR + 不泄漏 stack | API/integration | 500 + `code=INTERNAL_ERROR` + 响应体不含 RuntimeException / stacktrace | `backend/src/test/java/com/dealtrace/common/GlobalExceptionHandlerTest.java#internalErrorReturnsEnvelopeWithoutLeakingDetails` | COVERED |
+| 参数校验失败映射为 VALIDATION_ERROR 400 | API/integration | 400 + `code=VALIDATION_ERROR` + message 存在 | `backend/src/test/java/com/dealtrace/common/GlobalExceptionHandlerTest.java#validationErrorReturnsBadRequestEnvelope` | COVERED |
+| 未认证访问受保护端点返回统一 401 信封 | API/integration | 401 + `code=UNAUTHORIZED` + 响应体不含 AuthenticationException | `backend/src/test/java/com/dealtrace/security/SecurityScaffoldTest.java#unauthenticatedAccessReturnsUnifiedUnauthorizedEnvelope` | COVERED |
+| 匿名 GET `/health` 返回 200 + status=UP | API/integration | 200 + `code=SUCCESS` + `data.status=UP` | `backend/src/test/java/com/dealtrace/controller/HealthControllerTest.java#anonymousGetHealthReturnsSuccessEnvelopeWithStatusUp` | COVERED |
+| `unwrapEnvelope` SUCCESS 路径返回 inner data | Unit | 输入 `{code:'SUCCESS',data:{status:'UP'}}` → 返回 `{status:'UP'}` | `frontend/src/api/client.spec.ts#unwrapEnvelope > returns inner data when code is SUCCESS` | COVERED |
+| `unwrapEnvelope` 非 SUCCESS 抛 ApiError | Unit | 输入 `{code:'VALIDATION_ERROR',...}` → 抛 `ApiError` 含 code + message | `frontend/src/api/client.spec.ts#unwrapEnvelope > throws ApiError carrying code and message when envelope is not SUCCESS` | COVERED |
+| 跨事务测试 @AfterEach 真清表（基础设施） | API/integration | 方法 A INSERT + commit；方法 B 见 COUNT=0 | `backend/src/test/java/com/dealtrace/common/MultiTransactionalBasePoCTest.java#methodBSeesEmptyTableProvingAfterEachTruncated` | COVERED |
+| 前端 dev proxy + 后端 `/health` 连通 | E2E | `request.get('/api/health')` 返回 `code='SUCCESS'` | `frontend/tests/e2e/health.spec.ts` | BLOCKED（DEFERRED） |
+
+## Regression Scope
+
+- Changed behavior: 新增 platform-foundation capability（统一响应信封 / 兜底异常 / 健康检查）、Flyway 管道、Spring Security 骨架、前端 axios + 信封解析、跨事务测试基类
+- Directly impacted old behavior: 无（首次落地工程基线）
+- Historical defects considered: 无
+- Requirement-driven test additions / modifications / deletions: 仅新增（详见 `regression-impact-analysis.md`）
+- Regression risk level: Low
+- Selected regression tests and why: 每里程碑结束跑 backend `mvn -B test` 全套 + 前端 `vitest run` 全套；详见 `regression-impact-analysis.md`
+
+## Runtime QA Validation
+
+Runtime QA validation is availability smoke evidence only. It does not count as Unit/API/E2E business coverage.
+
+| Target | Operation | Result | Evidence | Cleanup |
+| --- | --- | --- | --- | --- |
+| 云 MySQL 8.4 `dealtrace` database | Flyway V1 baseline 首次实际执行 | PASS | `mvn -B test` 输出 `Successfully applied 1 migration to schema dealtrace, now at version v1`（里程碑 1 §3 Green 段） | `flyway_schema_history` 保留 V1 record（属正常基线，不需要清理） |
+| 前端 `vite build` 产物 | 严格 tsconfig 下完整编译 | PASS | `dist/index.html` + chunked assets 生成（里程碑 5 §8） | 不入 git（`dist/` 已 ignore） |
+
+## Failure Analysis
+
+| Failure / issue | Failure type | Root cause | Action taken | Follow-up coverage |
+| --- | --- | --- | --- | --- |
+| 伪 Red：`spring.jackson.serialization` 配置绑定失败 | environment / dependency（SB4 升级 Jackson 3 包路径） | LenientObjectToEnumConverter 不识别 kebab-case 枚举值 | 删除 `application.yml` 的 spring.jackson 段，scaffold 用默认 ISO-8601 | 不需要 |
+| 伪 Red：Flyway autoconfig 未触发 | environment / dependency（SB4 模块化） | `flyway-core` 不再触发 autoconfig | pom.xml 换 `spring-boot-starter-flyway`，记入 design.md §R3a | bootstrap 起所有用 starter |
+| 伪 Red：`@AutoConfigureMockMvc` 编译失败 | environment / dependency（SB4 模块化） | 测试 autoconfig 拆到独立 starter | pom.xml 加 `spring-boot-starter-webmvc-test` test scope；import 改新包路径，记入 design.md §R3b | 后续 controller 测试沿用 |
+
+## Failure Learning
+
+- Learning recorded or recommended: Yes
+- Knowledge location: `design.md` Risks §R3a / §R3b / §R3c
+- Summary: Spring Boot 4 模块化把 Flyway autoconfig 与 MockMvc autoconfig 拆出，直接依赖 `flyway-core` 与原 `spring-boot-starter-test` 已不够；新工程升级时必须按 starter 重新声明。这条作为 bootstrap-dealtrace-mvp 与未来 SB 升级的参考。
+
+## Remaining Risks
+
+- Uncovered test points: Playwright E2E smoke（DEFERRED，已记在 Tests Not Run）
+- Unresolved prerequisite blockers: 无
+- Requirement authority conflicts: 无
+- Known flaky areas: 无
+- Manual follow-up: 本地联调时手动触发一次 Playwright smoke；未来 CI 接入决策见下方
+- 警告类（非阻塞）：
+  - Mockito self-attaching JVM agent（Mockito / Java 24 兼容性提示）；后续如需精细 mock 再加 `byte-buddy-agent`
+  - Flyway 11.14.1 对 MySQL 8.4 的"未验证"警告（Community 版本验证可用）
+  - `UserDetailsServiceAutoConfiguration` 启动日志噪声（auth-account spec 注入真实 UserDetailsService 后消失）
+- **CI 接入决策（§11.1）**：本 change **不**实施 CI 接入。未来接入时：(a) database 名仍叫 `dealtrace`，不引入 `*_test` / `*_ci` 命名变体；(b) 用 Testcontainers + CI runner 内置 Docker 临时拉 MySQL 8.4；(c) 接入时机延后到 `bootstrap-dealtrace-mvp` 完成或本人主动需要 CI 时；workflow 选型（GitHub Actions / 自建）届时再决。
+
+## Final Statement
+
+scaffold-monorepo change 的 QA 收尾结论：platform-foundation 3 个 Requirement 在 API/integration 层以真 MySQL 8.4 完整覆盖（backend 8/8 Green），前端响应信封解析以 Vitest 单测覆盖（2/2 Green），多事务测试基类以 PoC 验证清理逻辑。后端骨架与前端骨架作为 documented non-TDD exception，分别以 `mvn compile` 与 `vite build` 提供 alternative validation。Playwright smoke E2E 配置 + 用例就绪但执行延后到本地联调；CI 接入决策延后到 bootstrap-dealtrace-mvp 之后；剩余风险全部为非阻塞警告。Overall result: **PASS**。
+
+下面按里程碑追加完整证据日志（详细 Red 输出 / Green 命令日志 / 派生工程教训），保留以便 bootstrap-dealtrace-mvp 阶段查阅。
+
+---
 
 ## 里程碑 1：QA 设计 + 后端骨架 + 数据库连通
 
@@ -229,5 +359,8 @@
 
 - Mockito self-attaching JVM agent 警告：Mockito / Java 24 兼容性提示，目前不影响功能；后续里程碑如需更精细的 mock 行为，再按 follow-up 在 pom.xml 注册 `byte-buddy-agent`。
 - Flyway 11.14.1 对 MySQL 8.4 的"未验证"警告：Community 版本验证可正常工作，Community 升级到正式支持 8.4 前持续观察，无需现在处置。
+- `UserDetailsServiceAutoConfiguration` 启动日志噪声：Spring Boot 默认装配 inMemoryUserDetailsManager，scaffold 阶段保留；auth-account spec 注入真实 `UserDetailsService` bean 后日志自动消失。
+- Playwright smoke E2E（`tests/e2e/health.spec.ts`）：配置与用例已就绪，**执行延后**到本地双 dev server 联调时手动触发一次；CI 接入决策见下条。
+- **CI 接入决策（§11.1）**：本 change **不**实施 CI 接入。未来接入时：(a) database 名仍叫 `dealtrace`，不引入 `*_test` / `*_ci` 命名变体；(b) 用 Testcontainers + CI runner 内置 Docker 临时拉 MySQL 8.4（云 DB 写权限不进 CI 黑名单的运行环境）；(c) 接入时机延后到 `bootstrap-dealtrace-mvp` 完成或本人主动需要 CI 时；具体 workflow 选型（GitHub Actions / 自建）届时再决。
 
-（里程碑 3-6 的证据将在对应阶段追加。）
+（里程碑 6 收尾完成。）
