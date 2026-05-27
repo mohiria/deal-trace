@@ -40,16 +40,16 @@
 
 ## 8. 前端项目骨架（documented non-TDD exception）
 
-- [ ] 8.1 在 `frontend/` 用 pnpm 初始化 Vite + Vue 3 + TypeScript 项目（`pnpm create vite frontend -- --template vue-ts`），`package.json` 的 `engines.node = ">=22"`、`packageManager = "pnpm@11.3.0"`。
-- [ ] 8.2 编辑 `tsconfig.json` 启用严格模式：`strict: true` / `noUncheckedIndexedAccess: true` / `noImplicitOverride: true` / `exactOptionalPropertyTypes: true` / `verbatimModuleSyntax: true`。
-- [ ] 8.3 安装并集成 `@arco-design/web-vue` 2.x、`vue-router` 4.x、`pinia` 2.x、`axios` 1.x；在 `main.ts` 中注册 Arco、Router、Pinia；创建 `src/styles/arco-theme.css` 占位（无 Tailwind）。
-- [ ] 8.4 创建前端目录骨架：`src/router/index.ts`（初始空路由数组）、`src/stores/auth.ts`（占位 store）、`src/api/client.ts`（Axios 实例 `baseURL='/api'` + 响应信封解析拦截器：自动 unwrap `data`，遇 `code !== 'SUCCESS'` 时抛业务错误）、`src/views/Home.vue`（最简占位组件）、`src/components/` `src/types/` 空目录 + `.gitkeep`。
-- [ ] 8.5 配置 `vite.config.ts` 的 dev `server.proxy`：`/api` → `http://localhost:8080`，`changeOrigin: true`。
+- [x] 8.1 在 `frontend/` 用 pnpm 初始化 Vite + Vue 3 + TypeScript 项目（`pnpm create vite frontend -- --template vue-ts`），`package.json` 的 `engines.node = ">=22"`、`packageManager = "pnpm@11.3.0"`。
+- [x] 8.2 编辑 `tsconfig.json` 启用严格模式：`strict: true` / `noUncheckedIndexedAccess: true` / `noImplicitOverride: true` / `exactOptionalPropertyTypes: true` / `verbatimModuleSyntax: true`。
+- [x] 8.3 安装并集成 `@arco-design/web-vue` 2.x、`vue-router` 4.x、`pinia` 2.x、`axios` 1.x；在 `main.ts` 中注册 Arco、Router、Pinia；创建 `src/styles/arco-theme.css` 占位（无 Tailwind）。
+- [x] 8.4 创建前端目录骨架：`src/router/index.ts`（初始空路由数组）、`src/stores/auth.ts`（占位 store）、`src/api/client.ts`（Axios 实例 `baseURL='/api'` + 响应信封解析拦截器：自动 unwrap `data`，遇 `code !== 'SUCCESS'` 时抛业务错误）、`src/views/Home.vue`（最简占位组件）、`src/components/` `src/types/` 空目录 + `.gitkeep`。
+- [x] 8.5 配置 `vite.config.ts` 的 dev `server.proxy`：`/api` → `http://localhost:8080`，`changeOrigin: true`。
 
 ## 9. 前端测试基础设施
 
-- [ ] 9.1 配置 Vitest（`vitest.config.ts` 或合并入 `vite.config.ts`）；写一个最简单元测试 `src/api/client.spec.ts`：测试 Axios 拦截器对 `code='SUCCESS'` 响应正确 unwrap `data`、对 `code='VALIDATION_ERROR'` 响应抛错（Red → Green）。
-- [ ] 9.2 配置 `@playwright/test`（`playwright.config.ts`），写一个 smoke E2E `tests/e2e/health.spec.ts`：启动 backend + frontend dev server，浏览器访问任意触发健康检查的页面或直接 `request.get('/api/health')`，断言响应 `code='SUCCESS'`；场景优先，不要求严格 Red-Green。
+- [x] 9.1 配置 Vitest（`vitest.config.ts` 或合并入 `vite.config.ts`）；写一个最简单元测试 `src/api/client.spec.ts`：测试 Axios 拦截器对 `code='SUCCESS'` 响应正确 unwrap `data`、对 `code='VALIDATION_ERROR'` 响应抛错（Red → Green）。
+- [x] 9.2 配置 `@playwright/test`（`playwright.config.ts`），写一个 smoke E2E `tests/e2e/health.spec.ts`：启动 backend + frontend dev server，浏览器访问任意触发健康检查的页面或直接 `request.get('/api/health')`，断言响应 `code='SUCCESS'`；场景优先，不要求严格 Red-Green。
 
 ## 10. QA 收尾产物
 

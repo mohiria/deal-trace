@@ -177,6 +177,54 @@
   - `backend/src/test/java/com/dealtrace/common/MultiTransactionalBasePoCTest.java#methodBSeesEmptyTableProvingAfterEachTruncated`
 - Side effect：测试结束后 `@AfterAll` DROP `truncate_poc`，不污染 dealtrace schema。
 
+## 里程碑 5：前端骨架 + 测试基础设施
+
+### Task §8 — Vite + Vue 3 + Arco 骨架（documented non-TDD exception）
+
+- 命令：`pnpm create vite frontend --template vue-ts` → `pnpm install` → `pnpm add @arco-design/web-vue@^2 vue-router@^4 pinia@^2 axios@^1` → `pnpm add -D vitest@^3 @vitest/coverage-v8@^3 jsdom@^25 @vue/test-utils@^2 @playwright/test@^1`
+- Alternative validation：
+  - `./node_modules/.bin/vue-tsc -b` → 退出 0（严格模式下 src 全量类型 OK）
+  - `./node_modules/.bin/vite build` → BUILD SUCCESS（生成 `dist/index.html` 与 chunked assets；warning 仅为 chunk 大小提示，未来按业务路由 code-split）
+- tsconfig.app.json 启用：`strict` / `noUncheckedIndexedAccess` / `noImplicitOverride` / `exactOptionalPropertyTypes` / `verbatimModuleSyntax`
+- main.ts 注册顺序：Pinia → Router → ArcoVue；样式按 `arco.css` + 占位 `arco-theme.css` 加载，未引入 Tailwind（符合 tech-arch §10 禁令）
+- vite.config.ts dev proxy `/api → http://localhost:8080`，`changeOrigin: true`
+- 骨架占位：`src/router/index.ts`（空 routes）、`src/stores/auth.ts`（仅 `token` ref + setter）、`src/views/Home.vue`、`src/components/.gitkeep`、`src/types/.gitkeep`
+
+### Task §9.1 — Vitest 单元测试 Red-Green-Refactor
+
+#### 合法 Red
+
+- 临时把 `unwrapEnvelope` 短路为 `return response.data.data`（跳过 SUCCESS 校验）
+- 命令：`./node_modules/.bin/vitest run src/api/client.spec.ts`
+- 结果：
+  ```
+  ❯ src/api/client.spec.ts (2 tests | 1 failed) 10ms
+    ✓ unwrapEnvelope > returns inner data when code is SUCCESS
+    × unwrapEnvelope > throws ApiError carrying code and message when envelope is not SUCCESS 6ms
+      → expected function to throw an error, but it didn't
+  ```
+- 性质：业务行为缺失（短路实现不抛 ApiError），**合法 Red**
+
+#### Green
+
+- 恢复 `unwrapEnvelope`（`code !== 'SUCCESS'` 抛 `ApiError`，否则返回 `envelope.data`）
+- 命令：`./node_modules/.bin/vitest run`
+- 结果：`Test Files 1 passed (1) | Tests 2 passed (2)`
+- 覆盖证据：
+  - `frontend/src/api/client.ts#unwrapEnvelope`
+  - `frontend/src/api/client.spec.ts#unwrapEnvelope > returns inner data when code is SUCCESS`
+  - `frontend/src/api/client.spec.ts#unwrapEnvelope > throws ApiError carrying code and message when envelope is not SUCCESS`
+
+#### 配置说明
+
+- `vitest.config.ts` 与 `vite.config.ts` 分开（前者 `defineConfig from 'vitest/config'`，后者 `from 'vite'`）。原因：vitest 3 / vite 8 / `@vitejs/plugin-vue` 6 在 Plugin 类型上有 HMR hook 签名差异，合并后 `vue-tsc -b` 会报 TS2769。拆分后类型检查与运行时都干净。
+
+### Task §9.2 — Playwright smoke E2E（配置 + 用例就绪，执行延后）
+
+- `playwright.config.ts`：testDir `./tests/e2e`，baseURL `http://localhost:5173`，chromium project
+- `tests/e2e/health.spec.ts`：用 `request.get('/api/health')` 经 Vite dev proxy 打到后端 `/health`，断言 `code='SUCCESS'` + `data.status='UP'`
+- 执行延后：需要并行启动 backend (`mvn spring-boot:run`) + frontend (`pnpm dev`) + 首次需 `pnpm exec playwright install chromium` 装浏览器；本 change 仅落地"基础设施 + 用例文件"，实际首次 smoke 由人在 §11.1 CI 接入决策前的本地联调阶段触发。
+
 ## 剩余风险与后续工作（持续追加）
 
 - Mockito self-attaching JVM agent 警告：Mockito / Java 24 兼容性提示，目前不影响功能；后续里程碑如需更精细的 mock 行为，再按 follow-up 在 pom.xml 注册 `byte-buddy-agent`。
