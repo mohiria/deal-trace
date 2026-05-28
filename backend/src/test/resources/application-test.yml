@@ -3,6 +3,14 @@ spring:
     activate:
       on-profile: test
 
+dealtrace:
+  jwt:
+    secret: dealtrace-test-secret-please-do-not-use-in-prod-32+chars
+    ttl-hours: 16
+  bootstrap:
+    admin-email: admin@dealtrace.test
+    admin-password: Adm1n!Test
+
 logging:
   level:
     com.dealtrace: DEBUG

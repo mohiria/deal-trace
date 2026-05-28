@@ -18,6 +18,14 @@ server:
   servlet:
     context-path: /api
 
+dealtrace:
+  jwt:
+    secret: ${DEALTRACE_JWT_SECRET}
+    ttl-hours: 16
+  bootstrap:
+    admin-email: ${DEALTRACE_ADMIN_EMAIL}
+    admin-password: ${DEALTRACE_ADMIN_PASSWORD}
+
 logging:
   level:
     root: INFO
