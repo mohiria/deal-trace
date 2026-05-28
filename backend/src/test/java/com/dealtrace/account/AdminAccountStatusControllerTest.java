@@ -21,6 +21,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,7 +59,7 @@ class AdminAccountStatusControllerTest extends MultiTransactionalIntegrationTest
 
     @Override
     protected Set<String> tablesToTruncate() {
-        return Set.of("account");
+        return Set.of("account", "system_log");
     }
 
     @BeforeEach
@@ -187,5 +189,64 @@ class AdminAccountStatusControllerTest extends MultiTransactionalIntegrationTest
                 .content("{\"status\":\"DISABLED\"}"))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+    }
+
+    /**
+     * system-log spec R1 + auth-account R7 跨 capability 回归：
+     * 停用动作不仅 spy.verify 触发，system_log 表也真实多一行。
+     */
+    @Test
+    void disable_persistsSystemLogRow() throws Exception {
+        String adminToken = jwtService.generateToken(admin);
+
+        mockMvc.perform(patch("/admin/accounts/" + sales.getId() + "/status")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"DISABLED\"}"))
+            .andExpect(status().isOk());
+
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+            "SELECT action, target_type, target_id, operator_id, lead_id, summary "
+                + "FROM system_log WHERE target_id = ? AND action = ?",
+            sales.getId(), "ACCOUNT_DISABLE");
+
+        assertThat(rows).hasSize(1);
+        Map<String, Object> row = rows.get(0);
+        assertThat(row.get("target_type")).isEqualTo("ACCOUNT");
+        assertThat(((Number) row.get("target_id")).longValue()).isEqualTo(sales.getId());
+        assertThat(((Number) row.get("operator_id")).longValue()).isEqualTo(admin.getId());
+        assertThat(row.get("lead_id")).isNull();
+        assertThat(row.get("summary")).isNull();
+    }
+
+    /**
+     * system-log spec R1 + auth-account R7：ENABLE 路径同样真行入库。
+     */
+    @Test
+    void enable_persistsSystemLogRow() throws Exception {
+        sales.setStatus(AccountStatus.DISABLED);
+        sales.setDisabledAt(LocalDateTime.now());
+        accountMapper.updateById(sales);
+
+        String adminToken = jwtService.generateToken(admin);
+
+        mockMvc.perform(patch("/admin/accounts/" + sales.getId() + "/status")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"ENABLED\"}"))
+            .andExpect(status().isOk());
+
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+            "SELECT action, target_type, target_id, operator_id, lead_id, summary "
+                + "FROM system_log WHERE target_id = ? AND action = ?",
+            sales.getId(), "ACCOUNT_ENABLE");
+
+        assertThat(rows).hasSize(1);
+        Map<String, Object> row = rows.get(0);
+        assertThat(row.get("target_type")).isEqualTo("ACCOUNT");
+        assertThat(((Number) row.get("target_id")).longValue()).isEqualTo(sales.getId());
+        assertThat(((Number) row.get("operator_id")).longValue()).isEqualTo(admin.getId());
+        assertThat(row.get("lead_id")).isNull();
+        assertThat(row.get("summary")).isNull();
     }
 }

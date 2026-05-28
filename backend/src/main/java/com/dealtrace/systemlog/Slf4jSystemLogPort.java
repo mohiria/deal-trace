@@ -7,8 +7,10 @@ import org.springframework.stereotype.Component;
 /**
  * {@link SystemLogPort} 的 NoOp 实现：只写 SLF4J INFO 日志，不落 DB。
  *
- * <p>仅在 auth-account change 阶段使用；progress-log change 必须提供 JDBC 实现替换本 bean
- * （已存项目记忆 systemlog-port-noop）。
+ * <p>system-log change 已落地 {@link JdbcSystemLogPort}（{@code @Primary}）接管默认注入位；
+ * 本类保留 {@code @Component} 仅作单元测试轻量替身与运维回滚兜底（删除 JdbcSystemLogPort
+ * 的 {@code @Primary} 即可让本 NoOp 自动顶上）。运行时 {@code @Autowired SystemLogPort}
+ * 注入的是 JdbcSystemLogPort，本类的 {@code record} 不会被业务路径调用。
  */
 @Component
 public class Slf4jSystemLogPort implements SystemLogPort {
