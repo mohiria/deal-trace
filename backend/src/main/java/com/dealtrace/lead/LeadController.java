@@ -10,12 +10,15 @@ import com.dealtrace.lead.dto.CreateLeadRequest;
 import com.dealtrace.lead.dto.DuplicateCheckResponse;
 import com.dealtrace.lead.dto.LeadView;
 import com.dealtrace.lead.dto.PoolLeadView;
+import com.dealtrace.lead.dto.LoseLeadRequest;
 import com.dealtrace.lead.dto.ReleaseLeadRequest;
 import com.dealtrace.lead.dto.TransferLeadRequest;
 import com.dealtrace.lead.dto.UpdateStageRequest;
+import com.dealtrace.lead.dto.WinLeadRequest;
 import com.dealtrace.lead.entity.BusinessType;
 import com.dealtrace.lead.entity.Lead;
 import com.dealtrace.lead.service.LeadDuplicateService;
+import com.dealtrace.lead.service.LeadClosureService;
 import com.dealtrace.lead.service.LeadOwnershipService;
 import com.dealtrace.lead.service.LeadService;
 import com.dealtrace.lead.service.LeadStageService;
@@ -48,17 +51,20 @@ public class LeadController {
     private final LeadService leadService;
     private final LeadOwnershipService ownershipService;
     private final LeadStageService stageService;
+    private final LeadClosureService closureService;
     private final LeadDuplicateService duplicateService;
     private final CustomerMapper customerMapper;
 
     public LeadController(LeadService leadService,
                           LeadOwnershipService ownershipService,
                           LeadStageService stageService,
+                          LeadClosureService closureService,
                           LeadDuplicateService duplicateService,
                           CustomerMapper customerMapper) {
         this.leadService = leadService;
         this.ownershipService = ownershipService;
         this.stageService = stageService;
+        this.closureService = closureService;
         this.duplicateService = duplicateService;
         this.customerMapper = customerMapper;
     }
@@ -170,6 +176,28 @@ public class LeadController {
             @RequestBody(required = false) UpdateStageRequest request) {
         String stage = request == null ? null : request.stage();
         return ApiResponse.ok(toView(stageService.changeStage(id, stage, principal)));
+    }
+
+    // ---- lead-closure：赢单 / 流失（ADMIN 任意线索 / SALES 自己名下）----
+
+    @PostMapping("/{id}/win")
+    public ApiResponse<LeadView> win(
+            @AuthenticationPrincipal AccountPrincipal principal,
+            @PathVariable Long id,
+            @RequestBody(required = false) WinLeadRequest request) {
+        var amount = request == null ? null : request.contractAmount();
+        var signedDate = request == null ? null : request.signedDate();
+        return ApiResponse.ok(toView(closureService.win(id, amount, signedDate, principal)));
+    }
+
+    @PostMapping("/{id}/lose")
+    public ApiResponse<LeadView> lose(
+            @AuthenticationPrincipal AccountPrincipal principal,
+            @PathVariable Long id,
+            @RequestBody(required = false) LoseLeadRequest request) {
+        String reason = request == null ? null : request.loseReason();
+        String note = request == null ? null : request.loseNote();
+        return ApiResponse.ok(toView(closureService.lose(id, reason, note, principal)));
     }
 
     private LeadView toView(Lead lead) {
