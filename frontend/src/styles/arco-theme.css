@@ -1,1 +1,9 @@
-/* Arco Design Vue 主题 token 覆盖占位：业务样式由后续 capability 在此追加。 */
+/*
+ * Arco Design Vue 主题对接。
+ *
+ * DealTrace 采用 Arco 的默认品牌蓝（#165DFF），与原型设计 token --dt-brand(#2563ff)
+ * 同一色系、视觉接近，且能复用 Arco 完整的 1~10 级色阶（hover/active/disabled 状态自洽）。
+ * 故此处不强行覆盖 Arco 主色阶（部分覆盖会导致交互态色阶错配）；
+ * DealTrace 自有的中性色 / 圆角 / 阴影等 chrome token 定义在 style.css 的 --dt-* 中，
+ * 由登录页与工作台外壳消费。后续业务页面如需统一圆角，可在此追加 Arco token 覆盖。
+ */
