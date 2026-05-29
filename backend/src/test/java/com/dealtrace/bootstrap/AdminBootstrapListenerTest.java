@@ -51,7 +51,13 @@ class AdminBootstrapListenerTest extends MultiTransactionalIntegrationTest {
     void clearAccountTable() {
         // 启动时 AdminBootstrapListener 已经注入了一条 ADMIN；@AfterEach 只在测试方法结束后清，
         // 首个测试方法跑前 table 仍有 startup 残留行，必须先清。
-        jdbcTemplate.execute("TRUNCATE TABLE account");
+        // lead-core change 起 lead.owner_sales_id FK 引用 account，TRUNCATE 需先关 FK_CHECKS。
+        jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 0");
+        try {
+            jdbcTemplate.execute("TRUNCATE TABLE account");
+        } finally {
+            jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 1");
+        }
     }
 
     @Test

@@ -6,6 +6,7 @@ import com.dealtrace.common.MultiTransactionalIntegrationTest;
 import com.dealtrace.customer.dto.CreateCustomerRequest;
 import com.dealtrace.customer.repository.CustomerMapper;
 import com.dealtrace.customer.service.CustomerService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -38,6 +39,21 @@ class CustomerConcurrentInsertTest extends MultiTransactionalIntegrationTest {
     @Override
     protected Set<String> tablesToTruncate() {
         return Set.of("customer");
+    }
+
+    /**
+     * @AfterEach 只在测试方法结束后清；首次跑前如有跨 session 残留（如 smoke 留下的
+     * Smoke ASCII Co with USCI 91110000123456789Q），两线程会都被 app-level 查重拦截，
+     * successCount=0 → 断言失败。@BeforeEach 显式清表，FK_CHECKS=0 防被 lead.customer_id 阻挡。
+     */
+    @BeforeEach
+    void truncateBefore() {
+        jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 0");
+        try {
+            jdbcTemplate.execute("TRUNCATE TABLE customer");
+        } finally {
+            jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 1");
+        }
     }
 
     @Test

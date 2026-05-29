@@ -47,10 +47,11 @@ class JdbcSystemLogPortExceptionTest {
     @Test
     void record_jdbcThrows_doesNotPropagate() {
         JdbcTemplate jdbc = Mockito.mock(JdbcTemplate.class);
-        // JdbcTemplate.update(String sql, Object... args) 的 varargs：用 7 个独立 any() 匹配
-        // (sql + action + targetType + targetId + operatorId + leadId + createdAt)
+        // JdbcTemplate.update(String sql, Object... args) 的 varargs：用 8 个独立 any() 匹配
+        // (sql + action + targetType + targetId + operatorId + leadId + summary + createdAt)
+        // lead-core change 起 SystemLogPort 增 summary 参数，INSERT SQL 多一个绑定位
         Mockito.when(jdbc.update(anyString(),
-                any(), any(), any(), any(), any(), any()))
+                any(), any(), any(), any(), any(), any(), any()))
             .thenThrow(new DataAccessException("boom") {});
 
         JdbcSystemLogPort port = new JdbcSystemLogPort(jdbc);
@@ -60,7 +61,7 @@ class JdbcSystemLogPortExceptionTest {
 
         // 先确认 mock 真的拦到了调用（排除"matcher 不匹配 → 默认返回 0 → 没抛"路径）
         verify(jdbc).update(anyString(),
-            any(), any(), any(), any(), any(), any());
+            any(), any(), any(), any(), any(), any(), any());
 
         // SLF4J ERROR 行包含 action / targetType / targetId / operatorId
         assertThat(logAppender.list)

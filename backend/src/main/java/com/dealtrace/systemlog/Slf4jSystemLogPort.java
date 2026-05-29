@@ -18,8 +18,8 @@ public class Slf4jSystemLogPort implements SystemLogPort {
     private static final Logger log = LoggerFactory.getLogger(Slf4jSystemLogPort.class);
 
     @Override
-    public void record(String action, String targetType, Long targetId, Long operatorId) {
-        log.info("[systemlog] action={} targetType={} targetId={} operatorId={}",
-            action, targetType, targetId, operatorId);
+    public void record(String action, String targetType, Long targetId, Long operatorId, String summary) {
+        log.info("[systemlog] action={} targetType={} targetId={} operatorId={} summary={}",
+            action, targetType, targetId, operatorId, summary);
     }
 }
