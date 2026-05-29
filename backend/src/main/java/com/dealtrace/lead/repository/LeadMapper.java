@@ -27,4 +27,11 @@ public interface LeadMapper extends BaseMapper<Lead> {
     /** 仅更新归属列；ownerSalesId 传 null 即移入公海。返回受影响行数。 */
     @Update("UPDATE `lead` SET owner_sales_id = #{ownerSalesId} WHERE id = #{id}")
     int updateOwner(@Param("id") Long id, @Param("ownerSalesId") Long ownerSalesId);
+
+    /**
+     * 仅更新阶段列（lead-stage）；{@code stage} 传 {@link com.dealtrace.lead.entity.LeadStage#getDbValue()}
+     * 中文枚举值。定向更新避免触碰 lastTrackedAt 等 ALWAYS 字段（spec：阶段变更不触 lastTrackedAt）。
+     */
+    @Update("UPDATE `lead` SET stage = #{stage} WHERE id = #{id}")
+    int updateStage(@Param("id") Long id, @Param("stage") String stage);
 }
