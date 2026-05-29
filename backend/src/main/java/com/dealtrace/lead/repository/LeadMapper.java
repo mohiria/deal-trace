@@ -34,4 +34,22 @@ public interface LeadMapper extends BaseMapper<Lead> {
      */
     @Update("UPDATE `lead` SET stage = #{stage} WHERE id = #{id}")
     int updateStage(@Param("id") Long id, @Param("stage") String stage);
+
+    /**
+     * 标记赢单（lead-closure）：定向更新 stage + won_at。{@code stage} 传 LeadStage.WON 的 dbValue，
+     * {@code wonAt} 由服务端时钟生成。合同记录由赢单事务另行插入。
+     */
+    @Update("UPDATE `lead` SET stage = #{stage}, won_at = #{wonAt} WHERE id = #{id}")
+    int updateWon(@Param("id") Long id, @Param("stage") String stage,
+                  @Param("wonAt") java.time.LocalDateTime wonAt);
+
+    /**
+     * 标记流失（lead-closure）：定向更新 stage + lost_at + lose_reason + lose_note。
+     * {@code loseReason} 传 LoseReason 的 dbValue；{@code loseNote} 可为 null。
+     */
+    @Update("UPDATE `lead` SET stage = #{stage}, lost_at = #{lostAt}, "
+        + "lose_reason = #{loseReason}, lose_note = #{loseNote} WHERE id = #{id}")
+    int updateLost(@Param("id") Long id, @Param("stage") String stage,
+                   @Param("lostAt") java.time.LocalDateTime lostAt,
+                   @Param("loseReason") String loseReason, @Param("loseNote") String loseNote);
 }
