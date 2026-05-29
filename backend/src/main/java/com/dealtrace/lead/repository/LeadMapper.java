@@ -52,4 +52,12 @@ public interface LeadMapper extends BaseMapper<Lead> {
     int updateLost(@Param("id") Long id, @Param("stage") String stage,
                    @Param("lostAt") java.time.LocalDateTime lostAt,
                    @Param("loseReason") String loseReason, @Param("loseNote") String loseNote);
+
+    /**
+     * 同步最后跟踪时间（progress-log）：仅更新 last_tracked_at。{@code trackTime} 须与新增进度的
+     * track_time 同值同源（同一次服务端 now，design D4）。定向更新避免触碰其它列。
+     */
+    @Update("UPDATE `lead` SET last_tracked_at = #{trackTime} WHERE id = #{id}")
+    int updateLastTrackedAt(@Param("id") Long id,
+                            @Param("trackTime") java.time.LocalDateTime trackTime);
 }
