@@ -22,6 +22,9 @@ import com.dealtrace.lead.service.LeadClosureService;
 import com.dealtrace.lead.service.LeadOwnershipService;
 import com.dealtrace.lead.service.LeadService;
 import com.dealtrace.lead.service.LeadStageService;
+import com.dealtrace.progresslog.dto.AddProgressRequest;
+import com.dealtrace.progresslog.dto.ProgressLogView;
+import com.dealtrace.progresslog.service.ProgressLogService;
 import com.dealtrace.security.AccountPrincipal;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -53,6 +56,7 @@ public class LeadController {
     private final LeadStageService stageService;
     private final LeadClosureService closureService;
     private final LeadDuplicateService duplicateService;
+    private final ProgressLogService progressLogService;
     private final CustomerMapper customerMapper;
 
     public LeadController(LeadService leadService,
@@ -60,12 +64,14 @@ public class LeadController {
                           LeadStageService stageService,
                           LeadClosureService closureService,
                           LeadDuplicateService duplicateService,
+                          ProgressLogService progressLogService,
                           CustomerMapper customerMapper) {
         this.leadService = leadService;
         this.ownershipService = ownershipService;
         this.stageService = stageService;
         this.closureService = closureService;
         this.duplicateService = duplicateService;
+        this.progressLogService = progressLogService;
         this.customerMapper = customerMapper;
     }
 
@@ -198,6 +204,26 @@ public class LeadController {
         String reason = request == null ? null : request.loseReason();
         String note = request == null ? null : request.loseNote();
         return ApiResponse.ok(toView(closureService.lose(id, reason, note, principal)));
+    }
+
+    // ---- progress-log：新增进度（仅 SALES 自己名下）/ 读取进度（ADMIN 任意 / SALES 自己名下）----
+
+    @PostMapping("/{id}/progress")
+    public ApiResponse<ProgressLogView> addProgress(
+            @AuthenticationPrincipal AccountPrincipal principal,
+            @PathVariable Long id,
+            @RequestBody(required = false) AddProgressRequest request) {
+        String method = request == null ? null : request.method();
+        String content = request == null ? null : request.content();
+        var entry = progressLogService.add(id, method, content, principal);
+        return ApiResponse.ok(ProgressLogView.of(entry, null));
+    }
+
+    @GetMapping("/{id}/progress")
+    public ApiResponse<List<ProgressLogView>> listProgress(
+            @AuthenticationPrincipal AccountPrincipal principal,
+            @PathVariable Long id) {
+        return ApiResponse.ok(progressLogService.list(id, principal));
     }
 
     private LeadView toView(Lead lead) {
