@@ -1,5 +1,7 @@
 package com.dealtrace.common.testsupport;
 
+import com.dealtrace.common.BusinessException;
+import com.dealtrace.common.ErrorCode;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.context.annotation.Profile;
@@ -31,6 +33,16 @@ public class TestThrowController {
     @GetMapping("/protected")
     public String protectedEndpoint() {
         return "ok";
+    }
+
+    @GetMapping("/lead-already-claimed")
+    public String leadAlreadyClaimed() {
+        throw new BusinessException(ErrorCode.LEAD_ALREADY_CLAIMED, "该线索已被认领");
+    }
+
+    @GetMapping("/lead-ended-readonly")
+    public String leadEndedReadonly() {
+        throw new BusinessException(ErrorCode.LEAD_ENDED_READONLY, "线索已结束，不可操作");
     }
 
     public record Payload(@NotBlank String value) {
