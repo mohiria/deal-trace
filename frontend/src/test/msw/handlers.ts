@@ -65,5 +65,120 @@ export function meUnauthorized(message = '登录状态已失效') {
   )
 }
 
+// ---- frontend-lead-flow：/leads/* handler 工厂 ----
+
+import type { LeadView, PoolLeadView, ProgressLogView } from '../../api/leads'
+
+/** 一条样例名下线索（未触达，非结束）。 */
+export const SAMPLE_LEAD: LeadView = {
+  id: 100,
+  customerId: 10,
+  customerName: '示例建筑设计院',
+  customerUsci: '91110000MA0000000X',
+  businessYear: 2026,
+  businessType: 'BIM咨询',
+  contactName: '王工',
+  contactPhone: '138****5678',
+  leadSource: '官网咨询',
+  ownerSalesId: 2,
+  stage: '未触达',
+  lastTrackedAt: null,
+  loseReason: null,
+  loseNote: null,
+  createdAt: '2026-05-01T09:00:00',
+  wonAt: null,
+  lostAt: null,
+}
+
+/** 一条公海线索（Sales 视角电话脱敏）。 */
+export const SAMPLE_POOL_LEAD: PoolLeadView = {
+  id: 200,
+  customerId: 20,
+  customerName: '公海客户甲',
+  customerUsci: '91110000MA1111111Y',
+  businessYear: 2026,
+  businessType: 'BIM培训',
+  contactName: '李经理',
+  contactPhone: '139****4321',
+  leadSource: '展会',
+  stage: '初步沟通',
+  lastTrackedAt: null,
+  createdAt: '2026-04-20T14:00:00',
+}
+
+export const SAMPLE_PROGRESS: ProgressLogView = {
+  id: 500,
+  leadId: 100,
+  method: '电话',
+  content: '首次电话沟通，客户有意向。',
+  trackerId: 2,
+  trackerName: '林雨',
+  trackTime: '2026-05-02T10:30:00',
+}
+
+export function mineLeads(rows: LeadView[] = [SAMPLE_LEAD]) {
+  return http.get('*/api/leads/mine', () => HttpResponse.json(success(rows)))
+}
+
+export function allLeads(rows: LeadView[] = [SAMPLE_LEAD]) {
+  return http.get('*/api/leads', () => HttpResponse.json(success(rows)))
+}
+
+export function leadDetail(lead: LeadView = SAMPLE_LEAD) {
+  return http.get('*/api/leads/:id', () => HttpResponse.json(success(lead)))
+}
+
+export function poolList(rows: PoolLeadView[] = [SAMPLE_POOL_LEAD]) {
+  return http.get('*/api/leads/pool', () => HttpResponse.json(success(rows)))
+}
+
+export function claimSuccess(lead: LeadView = { ...SAMPLE_LEAD, id: 200, ownerSalesId: 2, contactPhone: '13912344321' }) {
+  return http.post('*/api/leads/:id/claim', () => HttpResponse.json(success(lead)))
+}
+
+export function claimAlreadyClaimed(message = '该线索已被认领') {
+  return http.post('*/api/leads/:id/claim', () =>
+    HttpResponse.json(failure('LEAD_ALREADY_CLAIMED', message), { status: 409 }),
+  )
+}
+
+export function progressList(rows: ProgressLogView[] = [SAMPLE_PROGRESS]) {
+  return http.get('*/api/leads/:id/progress', () => HttpResponse.json(success(rows)))
+}
+
+export function addProgressSuccess(entry: ProgressLogView = SAMPLE_PROGRESS) {
+  return http.post('*/api/leads/:id/progress', () => HttpResponse.json(success(entry)))
+}
+
+export function stageSuccess(lead: LeadView = { ...SAMPLE_LEAD, stage: '方案报价' }) {
+  return http.patch('*/api/leads/:id/stage', () => HttpResponse.json(success(lead)))
+}
+
+export function winSuccess(lead: LeadView = { ...SAMPLE_LEAD, stage: '已赢单', wonAt: '2026-05-10T09:00:00' }) {
+  return http.post('*/api/leads/:id/win', () => HttpResponse.json(success(lead)))
+}
+
+export function loseSuccess(lead: LeadView = { ...SAMPLE_LEAD, stage: '已流失', loseReason: '其他', loseNote: '客户预算取消', lostAt: '2026-05-10T09:00:00' }) {
+  return http.post('*/api/leads/:id/lose', () => HttpResponse.json(success(lead)))
+}
+
+export function releaseSuccess(lead: LeadView = { ...SAMPLE_LEAD, ownerSalesId: null }) {
+  return http.post('*/api/leads/:id/release', () => HttpResponse.json(success(lead)))
+}
+
+/** 闭单只读：POST 写操作（claim/win/lose/release/progress）被后端以 LEAD_ENDED_READONLY 拒绝。 */
+export function endedReadonly(path: string, message = '线索已结束，不可操作') {
+  return http.post(`*/api/leads/:id/${path}`, () =>
+    HttpResponse.json(failure('LEAD_ENDED_READONLY', message), { status: 409 }),
+  )
+}
+
+/** 通用校验失败（金额/日期/必填等后端兜底）。 */
+export function validationError(path: string, message = '校验未通过') {
+  return http.post(`*/api/leads/:id/${path}`, () =>
+    HttpResponse.json(failure('VALIDATION_ERROR', message), { status: 400 }),
+  )
+}
+
 /** 默认 handler 集：登录成功 + me 成功（Admin）。 */
 export const handlers = [loginSuccess(), meSuccess()]
