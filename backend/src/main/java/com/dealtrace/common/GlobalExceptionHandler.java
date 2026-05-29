@@ -48,7 +48,9 @@ public class GlobalExceptionHandler {
             case VALIDATION_ERROR,
                  DUPLICATE_CUSTOMER,
                  DUPLICATE_ACTIVE_LEAD,
-                 DUPLICATE_WON_LEAD -> HttpStatus.BAD_REQUEST;
+                 DUPLICATE_WON_LEAD,
+                 LEAD_ENDED_READONLY -> HttpStatus.BAD_REQUEST;
+            case LEAD_ALREADY_CLAIMED -> HttpStatus.CONFLICT;
             case UNAUTHORIZED -> HttpStatus.UNAUTHORIZED;
             case FORBIDDEN -> HttpStatus.FORBIDDEN;
             case NOT_FOUND -> HttpStatus.NOT_FOUND;

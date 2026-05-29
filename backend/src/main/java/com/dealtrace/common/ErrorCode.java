@@ -8,8 +8,8 @@ package com.dealtrace.common;
  * <ul>
  *   <li>{@link #DUPLICATE_CUSTOMER}：customer change（PRD §7.2 / §8.1）</li>
  *   <li>{@link #DUPLICATE_ACTIVE_LEAD} / {@link #DUPLICATE_WON_LEAD}：lead-core change（PRD §8.2）</li>
- *   <li>LEAD_ALREADY_CLAIMED：未来 lead-ownership change</li>
- *   <li>LEAD_ENDED_READONLY：未来 lead-closure change</li>
+ *   <li>{@link #LEAD_ALREADY_CLAIMED}：lead-ownership change（PRD §7.5.7 / tech-arch §8.3）</li>
+ *   <li>{@link #LEAD_ENDED_READONLY}：lead-ownership change（PRD §8.5 / tech-arch §8.4）；后续 lead-closure 复用</li>
  *   <li>ACCOUNT_DISABLED：当前 auth-account 通过 JWT 过滤层 401 + message 表达，未引入独立 code</li>
  * </ul>
  */
@@ -22,5 +22,7 @@ public enum ErrorCode {
     INTERNAL_ERROR,
     DUPLICATE_CUSTOMER,
     DUPLICATE_ACTIVE_LEAD,
-    DUPLICATE_WON_LEAD
+    DUPLICATE_WON_LEAD,
+    LEAD_ALREADY_CLAIMED,
+    LEAD_ENDED_READONLY
 }

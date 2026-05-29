@@ -21,8 +21,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
- * Spec R9：lead-core 阶段不存在公海视图 / 认领 / 退回 / Admin 三剑客 / 阶段切换 /
- * 赢单 / 流失等端点。后续 change 落地时移除对应 reverse assertion 即可。
+ * Spec R9（经 lead-ownership MODIFY）：阶段切换 / 赢单 / 流失端点仍未在当前 capability 暴露。
+ *
+ * <p>公海视图 / 认领 / 退回 / 分配 / 回收 / 转移已由 lead-ownership change 实现，
+ * 对应 reverse assertion（claim / release / assign isNotMapped）已按 spec ADDED 要求移除——
+ * 权威依据：{@code openspec/changes/lead-ownership/specs/lead/spec.md} 的 ADDED 认领/退回/分配
+ * requirement 与 MODIFIED「不在范围内的能力」requirement。stage / win / lose 留待 lead-stage /
+ * lead-closure change 各自落地时再移除。
  */
 @AutoConfigureMockMvc
 class LeadNotInScopeTest extends IntegrationTest {
@@ -54,34 +59,6 @@ class LeadNotInScopeTest extends IntegrationTest {
         String body = result.getResponse().getContentAsString();
         assertThat(status).as("应为非 200").isNotEqualTo(200);
         assertThat(body).doesNotContain("\"code\":\"SUCCESS\"");
-    }
-
-    @Test
-    void claim_isNotMapped() throws Exception {
-        MvcResult r = mockMvc.perform(post("/leads/1/claim")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
-            .andReturn();
-        assertNotSuccess(r);
-    }
-
-    @Test
-    void release_isNotMapped() throws Exception {
-        MvcResult r = mockMvc.perform(post("/leads/1/release")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                .contentType("application/json")
-                .content("{\"note\":\"x\"}"))
-            .andReturn();
-        assertNotSuccess(r);
-    }
-
-    @Test
-    void assign_isNotMapped() throws Exception {
-        MvcResult r = mockMvc.perform(post("/leads/1/assign")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                .contentType("application/json")
-                .content("{\"ownerSalesId\":1}"))
-            .andReturn();
-        assertNotSuccess(r);
     }
 
     @Test

@@ -5,12 +5,17 @@ import com.dealtrace.common.BusinessException;
 import com.dealtrace.common.ErrorCode;
 import com.dealtrace.customer.entity.Customer;
 import com.dealtrace.customer.repository.CustomerMapper;
+import com.dealtrace.lead.dto.AssignLeadRequest;
 import com.dealtrace.lead.dto.CreateLeadRequest;
 import com.dealtrace.lead.dto.DuplicateCheckResponse;
 import com.dealtrace.lead.dto.LeadView;
+import com.dealtrace.lead.dto.PoolLeadView;
+import com.dealtrace.lead.dto.ReleaseLeadRequest;
+import com.dealtrace.lead.dto.TransferLeadRequest;
 import com.dealtrace.lead.entity.BusinessType;
 import com.dealtrace.lead.entity.Lead;
 import com.dealtrace.lead.service.LeadDuplicateService;
+import com.dealtrace.lead.service.LeadOwnershipService;
 import com.dealtrace.lead.service.LeadService;
 import com.dealtrace.security.AccountPrincipal;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -30,22 +35,24 @@ import java.util.Map;
 /**
  * 业务线索端点（design D4 / D9）。
  *
- * <p>本 controller 在 lead-core change 阶段仅提供 5 个端点；公海视图 / 认领 / 退回 /
- * Admin 三剑客 / 阶段切换 / 赢单 / 流失由后续 change 各自在本 controller 或专属 controller
- * 上扩展。
+ * <p>lead-core 提供创建 / 详情 / 列表 / 查重；lead-ownership 追加公海列表 + 认领 / 退回 /
+ * 分配 / 回收 / 转移 6 个端点。阶段切换 / 赢单 / 流失由后续 change 扩展。
  */
 @RestController
 @RequestMapping("/leads")
 public class LeadController {
 
     private final LeadService leadService;
+    private final LeadOwnershipService ownershipService;
     private final LeadDuplicateService duplicateService;
     private final CustomerMapper customerMapper;
 
     public LeadController(LeadService leadService,
+                          LeadOwnershipService ownershipService,
                           LeadDuplicateService duplicateService,
                           CustomerMapper customerMapper) {
         this.leadService = leadService;
+        this.ownershipService = ownershipService;
         this.duplicateService = duplicateService;
         this.customerMapper = customerMapper;
     }
@@ -93,6 +100,64 @@ public class LeadController {
         Lead lead = leadService.detailFor(id, principal);
         Customer customer = customerMapper.selectById(lead.getCustomerId());
         return ApiResponse.ok(LeadView.of(lead, customer));
+    }
+
+    // ---- lead-ownership：公海列表 + 5 个归属写动作 ----
+
+    @GetMapping("/pool")
+    public ApiResponse<List<PoolLeadView>> pool(@AuthenticationPrincipal AccountPrincipal principal) {
+        return ApiResponse.ok(ownershipService.listPool(principal));
+    }
+
+    @PostMapping("/{id}/claim")
+    @PreAuthorize("hasRole('SALES')")
+    public ApiResponse<LeadView> claim(
+            @AuthenticationPrincipal AccountPrincipal principal,
+            @PathVariable Long id) {
+        return ApiResponse.ok(toView(ownershipService.claim(id, principal)));
+    }
+
+    @PostMapping("/{id}/release")
+    @PreAuthorize("hasRole('SALES')")
+    public ApiResponse<LeadView> release(
+            @AuthenticationPrincipal AccountPrincipal principal,
+            @PathVariable Long id,
+            @RequestBody(required = false) ReleaseLeadRequest request) {
+        String note = request == null ? null : request.releaseNote();
+        return ApiResponse.ok(toView(ownershipService.release(id, note, principal)));
+    }
+
+    @PostMapping("/{id}/assign")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<LeadView> assign(
+            @AuthenticationPrincipal AccountPrincipal principal,
+            @PathVariable Long id,
+            @RequestBody(required = false) AssignLeadRequest request) {
+        Long salesId = request == null ? null : request.salesId();
+        return ApiResponse.ok(toView(ownershipService.assign(id, salesId, principal)));
+    }
+
+    @PostMapping("/{id}/recall")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<LeadView> recall(
+            @AuthenticationPrincipal AccountPrincipal principal,
+            @PathVariable Long id) {
+        return ApiResponse.ok(toView(ownershipService.recall(id, principal)));
+    }
+
+    @PostMapping("/{id}/transfer")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<LeadView> transfer(
+            @AuthenticationPrincipal AccountPrincipal principal,
+            @PathVariable Long id,
+            @RequestBody(required = false) TransferLeadRequest request) {
+        Long salesId = request == null ? null : request.salesId();
+        return ApiResponse.ok(toView(ownershipService.transfer(id, salesId, principal)));
+    }
+
+    private LeadView toView(Lead lead) {
+        Customer customer = customerMapper.selectById(lead.getCustomerId());
+        return LeadView.of(lead, customer);
     }
 
     private List<LeadView> toViews(List<Lead> rows) {
