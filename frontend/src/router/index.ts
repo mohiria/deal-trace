@@ -3,6 +3,9 @@ import type { RouteRecordRaw } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 import AppShell from '../components/AppShell.vue'
 import PlaceholderView from '../views/PlaceholderView.vue'
+import MyLeadsView from '../views/MyLeadsView.vue'
+import PublicPoolView from '../views/PublicPoolView.vue'
+import LeadDetailView from '../views/LeadDetailView.vue'
 import { authGuard } from './guards'
 
 /**
@@ -16,8 +19,9 @@ const routes: RouteRecordRaw[] = [
     component: AppShell,
     children: [
       { path: '', name: 'workbench', component: PlaceholderView, meta: { title: '销售工作台' } },
-      { path: 'my-leads', name: 'my-leads', component: PlaceholderView, meta: { title: '我的线索' } },
-      { path: 'public-pool', name: 'public-pool', component: PlaceholderView, meta: { title: '公海线索' } },
+      { path: 'my-leads', name: 'my-leads', component: MyLeadsView, meta: { title: '我的线索' } },
+      { path: 'public-pool', name: 'public-pool', component: PublicPoolView, meta: { title: '公海线索' } },
+      { path: 'leads/:id', name: 'lead-detail', component: LeadDetailView, meta: { title: '线索详情' } },
       { path: 'customers', name: 'customers', component: PlaceholderView, meta: { title: '客户管理' } },
       { path: 'contracts', name: 'contracts', component: PlaceholderView, meta: { title: '合同记录' } },
       {
