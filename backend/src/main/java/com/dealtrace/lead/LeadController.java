@@ -12,15 +12,18 @@ import com.dealtrace.lead.dto.LeadView;
 import com.dealtrace.lead.dto.PoolLeadView;
 import com.dealtrace.lead.dto.ReleaseLeadRequest;
 import com.dealtrace.lead.dto.TransferLeadRequest;
+import com.dealtrace.lead.dto.UpdateStageRequest;
 import com.dealtrace.lead.entity.BusinessType;
 import com.dealtrace.lead.entity.Lead;
 import com.dealtrace.lead.service.LeadDuplicateService;
 import com.dealtrace.lead.service.LeadOwnershipService;
 import com.dealtrace.lead.service.LeadService;
+import com.dealtrace.lead.service.LeadStageService;
 import com.dealtrace.security.AccountPrincipal;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -36,7 +39,7 @@ import java.util.Map;
  * 业务线索端点（design D4 / D9）。
  *
  * <p>lead-core 提供创建 / 详情 / 列表 / 查重；lead-ownership 追加公海列表 + 认领 / 退回 /
- * 分配 / 回收 / 转移 6 个端点。阶段切换 / 赢单 / 流失由后续 change 扩展。
+ * 分配 / 回收 / 转移 6 个端点；lead-stage 追加非结束阶段变更。赢单 / 流失由后续 change 扩展。
  */
 @RestController
 @RequestMapping("/leads")
@@ -44,15 +47,18 @@ public class LeadController {
 
     private final LeadService leadService;
     private final LeadOwnershipService ownershipService;
+    private final LeadStageService stageService;
     private final LeadDuplicateService duplicateService;
     private final CustomerMapper customerMapper;
 
     public LeadController(LeadService leadService,
                           LeadOwnershipService ownershipService,
+                          LeadStageService stageService,
                           LeadDuplicateService duplicateService,
                           CustomerMapper customerMapper) {
         this.leadService = leadService;
         this.ownershipService = ownershipService;
+        this.stageService = stageService;
         this.duplicateService = duplicateService;
         this.customerMapper = customerMapper;
     }
@@ -153,6 +159,17 @@ public class LeadController {
             @RequestBody(required = false) TransferLeadRequest request) {
         Long salesId = request == null ? null : request.salesId();
         return ApiResponse.ok(toView(ownershipService.transfer(id, salesId, principal)));
+    }
+
+    // ---- lead-stage：非结束阶段变更（ADMIN 任意线索 / SALES 自己名下）----
+
+    @PatchMapping("/{id}/stage")
+    public ApiResponse<LeadView> changeStage(
+            @AuthenticationPrincipal AccountPrincipal principal,
+            @PathVariable Long id,
+            @RequestBody(required = false) UpdateStageRequest request) {
+        String stage = request == null ? null : request.stage();
+        return ApiResponse.ok(toView(stageService.changeStage(id, stage, principal)));
     }
 
     private LeadView toView(Lead lead) {
