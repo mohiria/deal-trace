@@ -48,6 +48,11 @@ $RECYCLE.BIN/
 # omc skills 本地缓存（与项目无关的本地开发产物）
 .omc/
 
+# Claude Code 私有产物（项目级 .codex/ 整体忽略）
+.codex/
+.codex-run/
+
+
 # ============================================================================
 # Claude Code 私有产物（项目级 .claude/ 整体忽略）
 # 已 commit 的 .claude/commands/ 与 .claude/skills/ 保留 tracked；
