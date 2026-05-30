@@ -180,5 +180,100 @@ export function validationError(path: string, message = '校验未通过') {
   )
 }
 
+// ---- frontend-customer：/customers 与 /leads 创建 / 查重预检 handler 工厂 ----
+
+import type { CustomerView } from '../../api/customers'
+import type { DuplicateCheckResult } from '../../api/leads'
+
+/** 一条样例客户（4 字段，镜像后端 CustomerView）。 */
+export const SAMPLE_CUSTOMER: CustomerView = {
+  id: 10,
+  name: '示例建筑设计院',
+  usci: '91110000MA0000000X',
+  createdAt: '2026-05-01T09:00:00',
+}
+
+/** 无关键词列表：始终返回给定行（默认一条）。 */
+export function customerList(rows: CustomerView[] = [SAMPLE_CUSTOMER]) {
+  return http.get('*/api/customers', () => HttpResponse.json(success(rows)))
+}
+
+/**
+ * 关键词搜索：仅当请求带非空 `keyword` 时返回 `rows`，否则返回 `listRows`。
+ * 便于在同一测试中区分"无关键词列表"与"有关键词搜索"两态。
+ */
+export function customerSearch(rows: CustomerView[] = [SAMPLE_CUSTOMER], listRows: CustomerView[] = []) {
+  return http.get('*/api/customers', ({ request }) => {
+    const keyword = new URL(request.url).searchParams.get('keyword')
+    const hit = keyword && keyword.trim() !== '' ? rows : listRows
+    return HttpResponse.json(success(hit))
+  })
+}
+
+export function createCustomerSuccess(customer: CustomerView = SAMPLE_CUSTOMER) {
+  return http.post('*/api/customers', () => HttpResponse.json(success(customer)))
+}
+
+export function createCustomerDuplicate(message = '客户已存在') {
+  return http.post('*/api/customers', () =>
+    HttpResponse.json(failure('DUPLICATE_CUSTOMER', message), { status: 400 }),
+  )
+}
+
+export function createCustomerValidation(message = '统一社会信用代码校验未通过') {
+  return http.post('*/api/customers', () =>
+    HttpResponse.json(failure('VALIDATION_ERROR', message), { status: 400 }),
+  )
+}
+
+/** 查重预检：允许新建、无历史流失。 */
+export function duplicateCheckCanCreate() {
+  const data: DuplicateCheckResult = { canCreate: true, blockingReason: null, historicalLost: [] }
+  return http.get('*/api/leads/duplicate-check', () => HttpResponse.json(success(data)))
+}
+
+/** 查重预检：进行中线索阻塞。 */
+export function duplicateCheckBlockedActive() {
+  const data: DuplicateCheckResult = {
+    canCreate: false,
+    blockingReason: 'DUPLICATE_ACTIVE_LEAD',
+    historicalLost: [],
+  }
+  return http.get('*/api/leads/duplicate-check', () => HttpResponse.json(success(data)))
+}
+
+/** 查重预检：已赢单线索阻塞。 */
+export function duplicateCheckBlockedWon() {
+  const data: DuplicateCheckResult = {
+    canCreate: false,
+    blockingReason: 'DUPLICATE_WON_LEAD',
+    historicalLost: [],
+  }
+  return http.get('*/api/leads/duplicate-check', () => HttpResponse.json(success(data)))
+}
+
+/** 查重预检：允许新建但带历史流失记录（倒序）。 */
+export function duplicateCheckWithHistoricalLost() {
+  const data: DuplicateCheckResult = {
+    canCreate: true,
+    blockingReason: null,
+    historicalLost: [
+      { lostAt: '2026-03-10T09:00:00', loseReason: '价格过高', loseNote: '预算不足' },
+      { lostAt: '2025-11-02T09:00:00', loseReason: '选择竞品', loseNote: null },
+    ],
+  }
+  return http.get('*/api/leads/duplicate-check', () => HttpResponse.json(success(data)))
+}
+
+export function createLeadSuccess(lead: LeadView = { ...SAMPLE_LEAD, id: 300 }) {
+  return http.post('*/api/leads', () => HttpResponse.json(success(lead)))
+}
+
+export function createLeadValidation(message = '联系电话格式非法') {
+  return http.post('*/api/leads', () =>
+    HttpResponse.json(failure('VALIDATION_ERROR', message), { status: 400 }),
+  )
+}
+
 /** 默认 handler 集：登录成功 + me 成功（Admin）。 */
 export const handlers = [loginSuccess(), meSuccess()]

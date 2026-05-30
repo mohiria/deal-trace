@@ -31,6 +31,8 @@ import {
   loseLead,
   fetchProgress,
   addProgress,
+  createLead,
+  duplicateCheck,
 } from './leads'
 
 describe('leads API（D1）', () => {
@@ -139,6 +141,53 @@ describe('leads API（D1）', () => {
     )
     await addProgress(100, '电话', '已沟通')
     expect(captured).toEqual({ method: '电话', content: '已沟通' })
+  })
+
+  it('createLead 命中 POST /leads 并透传 payload', async () => {
+    let captured: unknown
+    server.use(
+      http.post('*/api/leads', async ({ request }) => {
+        captured = await request.json()
+        return HttpResponse.json({ code: 'SUCCESS', message: 'OK', data: SAMPLE_LEAD })
+      }),
+    )
+    await createLead({
+      customerId: 10,
+      businessType: 'BIM咨询',
+      contactName: '王工',
+      contactPhone: '13812345678',
+      leadSource: '官网',
+      assignToPool: true,
+    })
+    expect(captured).toEqual({
+      customerId: 10,
+      businessType: 'BIM咨询',
+      contactName: '王工',
+      contactPhone: '13812345678',
+      leadSource: '官网',
+      assignToPool: true,
+    })
+  })
+
+  it('duplicateCheck 命中 GET /leads/duplicate-check?customerId=&businessType= 并 unwrap', async () => {
+    let capturedUrl = ''
+    server.use(
+      http.get('*/api/leads/duplicate-check', ({ request }) => {
+        capturedUrl = request.url
+        return HttpResponse.json({
+          code: 'SUCCESS',
+          message: 'OK',
+          data: { canCreate: true, blockingReason: null, historicalLost: [] },
+        })
+      }),
+    )
+    const result = await duplicateCheck(42, 'BIM咨询')
+    const params = new URL(capturedUrl).searchParams
+    expect(params.get('customerId')).toBe('42')
+    expect(params.get('businessType')).toBe('BIM咨询')
+    expect(result.canCreate).toBe(true)
+    expect(result.blockingReason).toBeNull()
+    expect(result.historicalLost).toEqual([])
   })
 
   // 引用工厂以避免未使用告警（部分用例用内联 handler 断言请求体）

@@ -54,6 +54,33 @@ export interface ProgressLogView {
   trackTime: string
 }
 
+/** 创建线索入参（spec R4 / 后端 `CreateLeadRequest`）。`businessYear` / `stage` 由服务端派生，前端不传。 */
+export interface CreateLeadPayload {
+  customerId: number
+  businessType: string
+  contactName: string
+  contactPhone: string
+  /** 选填线索来源。 */
+  leadSource?: string
+  /** Sales 显式放入公海；省略表示按角色默认归属（Sales 归己 / Admin 公海）。 */
+  assignToPool?: boolean
+}
+
+/** 一条历史流失记录（查重预检返回，按 lostAt 倒序）。 */
+export interface HistoricalLost {
+  lostAt: string | null
+  loseReason: string | null
+  loseNote: string | null
+}
+
+/** 查重预检结果（对应后端 `DuplicateCheckResponse`，spec R4 / lead spec R6）。 */
+export interface DuplicateCheckResult {
+  canCreate: boolean
+  /** canCreate=false 时为 `DUPLICATE_ACTIVE_LEAD` / `DUPLICATE_WON_LEAD`，否则 null。 */
+  blockingReason: string | null
+  historicalLost: HistoricalLost[]
+}
+
 /** Sales 名下线索（`GET /leads/mine`）。 */
 export function fetchMyLeads(): Promise<LeadView[]> {
   return apiClient.get<LeadView[], LeadView[]>('/leads/mine')
@@ -107,4 +134,16 @@ export function fetchProgress(id: number): Promise<ProgressLogView[]> {
 /** 追加进度（`POST /leads/{id}/progress`，仅 SALES 名下）。 */
 export function addProgress(id: number, method: string, content: string): Promise<ProgressLogView> {
   return apiClient.post<ProgressLogView, ProgressLogView>(`/leads/${id}/progress`, { method, content })
+}
+
+/** 创建线索（`POST /leads`）。payload 透传，归属由后端按角色裁决（design D6）。 */
+export function createLead(payload: CreateLeadPayload): Promise<LeadView> {
+  return apiClient.post<LeadView, LeadView>('/leads', payload)
+}
+
+/** 查重预检（`GET /leads/duplicate-check?customerId=&businessType=`），无持久化副作用。 */
+export function duplicateCheck(customerId: number, businessType: string): Promise<DuplicateCheckResult> {
+  return apiClient.get<DuplicateCheckResult, DuplicateCheckResult>('/leads/duplicate-check', {
+    params: { customerId, businessType },
+  })
 }
