@@ -6,6 +6,8 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
+    // 与组件测试（@vue/test-utils 用 `[data-test=...]`）共用同一属性，getByTestId 命中 `data-test`。
+    testIdAttribute: 'data-test',
   },
   projects: [
     {
