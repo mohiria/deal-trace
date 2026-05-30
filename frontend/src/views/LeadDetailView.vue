@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { useAuthStore } from '../stores/auth'
 import { useLeadsStore } from '../stores/leads'
+import { useAccountsStore } from '../stores/accounts'
 import { ApiError } from '../api/client'
 import {
   ACTIVE_STAGES,
@@ -22,6 +23,7 @@ import {
 const route = useRoute()
 const auth = useAuthStore()
 const leads = useLeadsStore()
+const accounts = useAccountsStore()
 
 const leadId = Number(route.params.id)
 
@@ -39,6 +41,16 @@ const showProgressAdd = computed(() => !closed.value && canSalesOwn.value)
 const showStageWinLose = computed(() => !closed.value && canStageActions.value)
 const showRelease = computed(() => !closed.value && canSalesOwn.value)
 
+/** Admin 归属操作（design D3）：仅 ADMIN + 未结束线索呈现；按 ownerSalesId 分叉。 */
+const showOwnership = computed(() => auth.isAdmin && !closed.value)
+const isPool = computed(() => lead.value?.ownerSalesId == null)
+/** 分配候选 = 启用 Sales（D4）。 */
+const assignCandidates = computed(() => accounts.enabledSales)
+/** 转移候选 = 启用 Sales 排除当前归属。 */
+const transferCandidates = computed(() =>
+  accounts.enabledSales.filter((s) => s.id !== lead.value?.ownerSalesId),
+)
+
 const targetStages = computed(() => ACTIVE_STAGES.filter((s) => s !== lead.value?.stage))
 
 // 追加进度表单
@@ -47,10 +59,15 @@ const progress = reactive({ method: TRACK_METHODS[0]!, content: '' })
 const winVisible = ref(false)
 const loseVisible = ref(false)
 const releaseVisible = ref(false)
+const assignVisible = ref(false)
+const transferVisible = ref(false)
 // 弹窗表单
 const winForm = reactive({ amount: '', signedDate: '' })
 const loseForm = reactive({ reason: '', note: '' })
 const releaseForm = reactive({ note: '' })
+// 目标销售 id；0 为「未选择」哨兵（账号 id 恒为正）。a-radio-group modelValue 不接受 null/undefined。
+const assignTarget = ref(0)
+const transferTarget = ref(0)
 const acting = ref(false)
 
 const winAmountPreview = computed(() => formatAmount(winForm.amount))
@@ -138,9 +155,61 @@ async function onReleaseConfirm() {
   }
 }
 
+function openAssign() {
+  assignTarget.value = 0
+  assignVisible.value = true
+}
+
+function openTransfer() {
+  transferTarget.value = 0
+  transferVisible.value = true
+}
+
+/** 归属写动作失败时据后端刷新该线索（状态机相关，避免前端态漂移，design D3/D5）。 */
+async function onAssignConfirm() {
+  if (!assignTarget.value) {
+    Message.warning('请选择目标销售')
+    return
+  }
+  const ok = await runWrite(() => leads.assign(leadId, assignTarget.value))
+  assignVisible.value = false
+  if (ok) {
+    Message.success('已分配')
+  } else {
+    await leads.loadLead(leadId)
+  }
+}
+
+async function onRecall() {
+  const ok = await runWrite(() => leads.recall(leadId))
+  if (ok) {
+    Message.success('已回收至公海')
+  } else {
+    await leads.loadLead(leadId)
+  }
+}
+
+async function onTransferConfirm() {
+  if (!transferTarget.value) {
+    Message.warning('请选择目标销售')
+    return
+  }
+  const ok = await runWrite(() => leads.transfer(leadId, transferTarget.value))
+  transferVisible.value = false
+  if (ok) {
+    Message.success('已转移')
+  } else {
+    await leads.loadLead(leadId)
+  }
+}
+
 onMounted(() => {
   void leads.loadLead(leadId)
   void leads.loadProgress(leadId)
+  // Admin 需要启用 Sales 列表作分配 / 转移候选（D4）；Sales 详情页不拉账号。
+  if (auth.isAdmin) {
+    void accounts.loadAccounts()
+  }
 })
 </script>
 
@@ -190,6 +259,18 @@ onMounted(() => {
       <a-button v-if="showRelease" class="release-open" size="small" @click="releaseVisible = true">
         退回公海
       </a-button>
+    </div>
+
+    <!-- Admin 归属操作区（D3）：未结束线索；公海→分配，有归属→回收/转移 -->
+    <div v-if="showOwnership" class="ownership-actions">
+      <span class="ownership-label">归属调度</span>
+      <a-button v-if="isPool" class="assign-open" type="primary" size="small" @click="openAssign">
+        分配给销售
+      </a-button>
+      <template v-else>
+        <a-button class="recall-btn" size="small" :loading="acting" @click="onRecall">回收至公海</a-button>
+        <a-button class="transfer-open" type="primary" size="small" @click="openTransfer">转移给销售</a-button>
+      </template>
     </div>
 
     <!-- 进度跟踪流（倒序，由后端保证顺序） -->
@@ -291,6 +372,50 @@ onMounted(() => {
         </div>
       </div>
     </a-modal>
+
+    <!-- 分配弹窗（公海线索 → 启用 Sales） -->
+    <a-modal
+      :visible="assignVisible"
+      :render-to-body="false"
+      :footer="false"
+      title="分配线索"
+      @cancel="assignVisible = false"
+    >
+      <div class="assign-modal">
+        <a-radio-group v-model="assignTarget" direction="vertical" class="assign-target">
+          <a-radio v-for="s in assignCandidates" :key="s.id" :value="s.id">{{ s.name }}</a-radio>
+        </a-radio-group>
+        <p v-if="assignCandidates.length === 0" class="ownership-empty">暂无可分配的启用销售</p>
+        <div class="modal-footer">
+          <a-button @click="assignVisible = false">取消</a-button>
+          <a-button class="assign-confirm" type="primary" :loading="acting" @click="onAssignConfirm">
+            确定分配
+          </a-button>
+        </div>
+      </div>
+    </a-modal>
+
+    <!-- 转移弹窗（有归属线索 → 另一启用 Sales） -->
+    <a-modal
+      :visible="transferVisible"
+      :render-to-body="false"
+      :footer="false"
+      title="转移线索"
+      @cancel="transferVisible = false"
+    >
+      <div class="transfer-modal">
+        <a-radio-group v-model="transferTarget" direction="vertical" class="transfer-target">
+          <a-radio v-for="s in transferCandidates" :key="s.id" :value="s.id">{{ s.name }}</a-radio>
+        </a-radio-group>
+        <p v-if="transferCandidates.length === 0" class="ownership-empty">暂无可转移的启用销售</p>
+        <div class="modal-footer">
+          <a-button @click="transferVisible = false">取消</a-button>
+          <a-button class="transfer-confirm" type="primary" :loading="acting" @click="onTransferConfirm">
+            确定转移
+          </a-button>
+        </div>
+      </div>
+    </a-modal>
   </section>
 
   <a-spin v-else class="detail-loading" />
@@ -385,10 +510,33 @@ onMounted(() => {
 
 .win-modal,
 .lose-modal,
-.release-modal {
+.release-modal,
+.assign-modal,
+.transfer-modal {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.ownership-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  background: var(--dt-surface, #ffffff);
+  border: 1px solid var(--dt-line, #e6e8f0);
+  border-radius: var(--dt-radius, 12px);
+  padding: 16px;
+}
+
+.ownership-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dt-muted, #70778c);
+}
+
+.ownership-empty {
+  color: var(--dt-muted, #70778c);
 }
 
 .modal-footer {

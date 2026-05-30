@@ -33,6 +33,9 @@ import {
   addProgress,
   createLead,
   duplicateCheck,
+  assignLead,
+  recallLead,
+  transferLead,
 } from './leads'
 
 describe('leads API（D1）', () => {
@@ -188,6 +191,52 @@ describe('leads API（D1）', () => {
     expect(result.canCreate).toBe(true)
     expect(result.blockingReason).toBeNull()
     expect(result.historicalLost).toEqual([])
+  })
+
+  it('assignLead 命中 POST /leads/{id}/assign 并带 salesId', async () => {
+    let captured: unknown
+    server.use(
+      http.post('*/api/leads/:id/assign', async ({ request }) => {
+        captured = await request.json()
+        return HttpResponse.json({ code: 'SUCCESS', message: 'OK', data: { ...SAMPLE_LEAD, ownerSalesId: 2 } })
+      }),
+    )
+    const lead = await assignLead(100, 2)
+    expect(captured).toEqual({ salesId: 2 })
+    expect(lead.ownerSalesId).toBe(2)
+  })
+
+  it('recallLead 命中 POST /leads/{id}/recall 并返回公海归属', async () => {
+    server.use(
+      http.post('*/api/leads/:id/recall', () =>
+        HttpResponse.json({ code: 'SUCCESS', message: 'OK', data: { ...SAMPLE_LEAD, ownerSalesId: null } }),
+      ),
+    )
+    const lead = await recallLead(100)
+    expect(lead.ownerSalesId).toBeNull()
+  })
+
+  it('transferLead 命中 POST /leads/{id}/transfer 并带 salesId', async () => {
+    let captured: unknown
+    server.use(
+      http.post('*/api/leads/:id/transfer', async ({ request }) => {
+        captured = await request.json()
+        return HttpResponse.json({ code: 'SUCCESS', message: 'OK', data: { ...SAMPLE_LEAD, ownerSalesId: 3 } })
+      }),
+    )
+    const lead = await transferLead(100, 3)
+    expect(captured).toEqual({ salesId: 3 })
+    expect(lead.ownerSalesId).toBe(3)
+  })
+
+  it('归属写动作遇 LEAD_ENDED_READONLY 归一为 ApiError', async () => {
+    server.use(
+      http.post('*/api/leads/:id/assign', () =>
+        HttpResponse.json({ code: 'LEAD_ENDED_READONLY', message: '线索已结束', data: null }, { status: 409 }),
+      ),
+    )
+    await expect(assignLead(100, 2)).rejects.toMatchObject({ code: 'LEAD_ENDED_READONLY' })
+    await expect(assignLead(100, 2)).rejects.toBeInstanceOf(ApiError)
   })
 
   // 引用工厂以避免未使用告警（部分用例用内联 handler 断言请求体）

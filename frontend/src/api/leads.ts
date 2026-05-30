@@ -111,6 +111,21 @@ export function releaseLead(id: number, releaseNote: string): Promise<LeadView> 
   return apiClient.post<LeadView, LeadView>(`/leads/${id}/release`, { releaseNote })
 }
 
+/** 分配公海线索给指定 Sales（`POST /leads/{id}/assign`，仅 ADMIN）。 */
+export function assignLead(id: number, salesId: number): Promise<LeadView> {
+  return apiClient.post<LeadView, LeadView>(`/leads/${id}/assign`, { salesId })
+}
+
+/** 回收名下线索至公海（`POST /leads/{id}/recall`，仅 ADMIN）。 */
+export function recallLead(id: number): Promise<LeadView> {
+  return apiClient.post<LeadView, LeadView>(`/leads/${id}/recall`)
+}
+
+/** 转移名下线索给另一 Sales（`POST /leads/{id}/transfer`，仅 ADMIN）。 */
+export function transferLead(id: number, salesId: number): Promise<LeadView> {
+  return apiClient.post<LeadView, LeadView>(`/leads/${id}/transfer`, { salesId })
+}
+
 /** 变更非结束阶段（`PATCH /leads/{id}/stage`）。 */
 export function changeStage(id: number, stage: string): Promise<LeadView> {
   return apiClient.patch<LeadView, LeadView>(`/leads/${id}/stage`, { stage })

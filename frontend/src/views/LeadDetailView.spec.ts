@@ -20,8 +20,17 @@ import {
   releaseSuccess,
   stageSuccess,
   winSuccess,
+  accountsList,
+  assignSuccess,
+  assignAlreadyOwned,
+  recallSuccess,
+  recallAlreadyPool,
+  transferSuccess,
+  transferSameOwner,
+  ownershipEndedReadonly,
 } from '../test/msw/handlers'
 import type { LeadView, ProgressLogView } from '../api/leads'
+import type { AccountView } from '../api/accounts'
 import { useAuthStore } from '../stores/auth'
 import { useLeadsStore } from '../stores/leads'
 import LeadDetailView from './LeadDetailView.vue'
@@ -43,11 +52,18 @@ interface MountOpts {
   progressRows?: ProgressLogView[]
 }
 
+/** 归属候选样例：两个启用 Sales（id2 林雨 / id3 赵磊）+ 一个停用 Sales + Admin。enabledSales = [林雨, 赵磊]。 */
+const ACCT_ADMIN: AccountView = { id: 1, email: 'admin@dealtrace.local', name: '系统管理员', role: 'ADMIN', status: 'ENABLED', createdAt: '2026-04-01T09:00:00' }
+const ACCT_SALES_A: AccountView = { id: 2, email: 'a@dealtrace.local', name: '林雨', role: 'SALES', status: 'ENABLED', createdAt: '2026-05-01T09:00:00' }
+const ACCT_SALES_B: AccountView = { id: 3, email: 'b@dealtrace.local', name: '赵磊', role: 'SALES', status: 'ENABLED', createdAt: '2026-05-02T09:00:00' }
+const ACCT_SALES_OFF: AccountView = { id: 4, email: 'c@dealtrace.local', name: '停用员', role: 'SALES', status: 'DISABLED', createdAt: '2026-05-03T09:00:00' }
+
 async function mountView(opts: MountOpts = {}): Promise<VueWrapper> {
   const role = opts.role ?? SALES_USER
   const lead = opts.lead ?? SAMPLE_LEAD
   const rows = opts.progressRows ?? [SAMPLE_PROGRESS]
-  server.use(leadDetail(lead), progressList(rows))
+  // Admin 挂载会拉账号列表作归属候选（D4）；始终注册避免 onUnhandledRequest:'error'。
+  server.use(leadDetail(lead), progressList(rows), accountsList([ACCT_ADMIN, ACCT_SALES_A, ACCT_SALES_B, ACCT_SALES_OFF]))
 
   const store = useAuthStore()
   store.currentUser = role
@@ -265,5 +281,160 @@ describe('闭单只读（R7）', () => {
     expect(wrapper.find('.progress-form').exists()).toBe(false)
     expect(wrapper.find('.release-open').exists()).toBe(false)
     expect(wrapper.find('.win-open').exists()).toBe(true)
+  })
+})
+
+describe('Admin 归属操作区（spec：分配/回收/转移）', () => {
+  const POOL_LEAD: LeadView = { ...SAMPLE_LEAD, ownerSalesId: null }
+  const OWNED_LEAD: LeadView = { ...SAMPLE_LEAD, ownerSalesId: 2 }
+  const WON_LEAD: LeadView = { ...SAMPLE_LEAD, stage: '已赢单', wonAt: '2026-05-10T09:00:00' }
+
+  it('归属区仅对 Admin 呈现（SALES 不呈现）', async () => {
+    const wrapper = await mountView({ role: SALES_USER, lead: OWNED_LEAD })
+    expect(wrapper.find('.ownership-actions').exists()).toBe(false)
+  })
+
+  it('归属区不对已结束线索呈现', async () => {
+    const wrapper = await mountView({ role: ADMIN_USER, lead: WON_LEAD })
+    expect(wrapper.find('.ownership-actions').exists()).toBe(false)
+  })
+
+  it('公海线索（无归属）仅呈现分配入口', async () => {
+    const wrapper = await mountView({ role: ADMIN_USER, lead: POOL_LEAD })
+    expect(wrapper.find('.ownership-actions').exists()).toBe(true)
+    expect(wrapper.find('.assign-open').exists()).toBe(true)
+    expect(wrapper.find('.recall-btn').exists()).toBe(false)
+    expect(wrapper.find('.transfer-open').exists()).toBe(false)
+  })
+
+  it('有归属线索呈现回收与转移入口', async () => {
+    const wrapper = await mountView({ role: ADMIN_USER, lead: OWNED_LEAD })
+    expect(wrapper.find('.recall-btn').exists()).toBe(true)
+    expect(wrapper.find('.transfer-open').exists()).toBe(true)
+    expect(wrapper.find('.assign-open').exists()).toBe(false)
+  })
+
+  it('分配候选仅含启用 Sales（排除 Admin 与停用）', async () => {
+    const wrapper = await mountView({ role: ADMIN_USER, lead: POOL_LEAD })
+    await wrapper.find('.assign-open').trigger('click')
+    await flushPromises()
+    const candidates = wrapper.find('.assign-target').findAll('.arco-radio')
+    expect(candidates).toHaveLength(2) // 林雨 + 赵磊
+    const text = wrapper.find('.assign-target').text()
+    expect(text).toContain('林雨')
+    expect(text).toContain('赵磊')
+    expect(text).not.toContain('停用员')
+    expect(text).not.toContain('系统管理员')
+  })
+
+  it('转移候选排除当前归属', async () => {
+    const wrapper = await mountView({ role: ADMIN_USER, lead: OWNED_LEAD })
+    await wrapper.find('.transfer-open').trigger('click')
+    await flushPromises()
+    const candidates = wrapper.find('.transfer-target').findAll('.arco-radio')
+    expect(candidates).toHaveLength(1) // 排除当前归属 id2 林雨，仅余赵磊
+    expect(wrapper.find('.transfer-target').text()).toContain('赵磊')
+    expect(wrapper.find('.transfer-target').text()).not.toContain('林雨')
+  })
+
+  it('分配成功后归属更新', async () => {
+    const wrapper = await mountView({ role: ADMIN_USER, lead: POOL_LEAD })
+    server.use(assignSuccess({ ...SAMPLE_LEAD, ownerSalesId: 2 }))
+
+    await wrapper.find('.assign-open').trigger('click')
+    await flushPromises()
+    await clickRadio(wrapper, '.assign-target', '林雨')
+    await wrapper.find('.assign-confirm').trigger('click')
+    await flushPromises()
+
+    expect(useLeadsStore().currentLead?.ownerSalesId).toBe(2)
+  })
+
+  it('分配已有归属被 VALIDATION_ERROR 拒绝时提示并据后端刷新', async () => {
+    const wrapper = await mountView({ role: ADMIN_USER, lead: POOL_LEAD })
+    const store = useLeadsStore()
+    const errSpy = vi.spyOn(Message, 'error')
+    const reloadSpy = vi.spyOn(store, 'loadLead')
+    server.use(assignAlreadyOwned('线索已有归属，请使用转移'))
+
+    await wrapper.find('.assign-open').trigger('click')
+    await flushPromises()
+    await clickRadio(wrapper, '.assign-target', '林雨')
+    await wrapper.find('.assign-confirm').trigger('click')
+    await flushPromises()
+
+    expect(errSpy.mock.calls.some((c) => String(c[0]).includes('请使用转移'))).toBe(true)
+    expect(reloadSpy).toHaveBeenCalledWith(100)
+  })
+
+  it('回收成功后线索进入公海', async () => {
+    const wrapper = await mountView({ role: ADMIN_USER, lead: OWNED_LEAD })
+    server.use(recallSuccess({ ...SAMPLE_LEAD, ownerSalesId: null }))
+
+    await wrapper.find('.recall-btn').trigger('click')
+    await flushPromises()
+
+    expect(useLeadsStore().currentLead?.ownerSalesId).toBeNull()
+  })
+
+  it('回收已在公海被 VALIDATION_ERROR 拒绝时提示并刷新', async () => {
+    const wrapper = await mountView({ role: ADMIN_USER, lead: OWNED_LEAD })
+    const store = useLeadsStore()
+    const errSpy = vi.spyOn(Message, 'error')
+    const reloadSpy = vi.spyOn(store, 'loadLead')
+    server.use(recallAlreadyPool('线索已在公海，无需回收'))
+
+    await wrapper.find('.recall-btn').trigger('click')
+    await flushPromises()
+
+    expect(errSpy.mock.calls.some((c) => String(c[0]).includes('无需回收'))).toBe(true)
+    expect(reloadSpy).toHaveBeenCalledWith(100)
+  })
+
+  it('转移成功后归属更新为新 Sales', async () => {
+    const wrapper = await mountView({ role: ADMIN_USER, lead: OWNED_LEAD })
+    server.use(transferSuccess({ ...SAMPLE_LEAD, ownerSalesId: 3 }))
+
+    await wrapper.find('.transfer-open').trigger('click')
+    await flushPromises()
+    await clickRadio(wrapper, '.transfer-target', '赵磊')
+    await wrapper.find('.transfer-confirm').trigger('click')
+    await flushPromises()
+
+    expect(useLeadsStore().currentLead?.ownerSalesId).toBe(3)
+  })
+
+  it('转移目标相同被 VALIDATION_ERROR 拒绝时提示并刷新', async () => {
+    const wrapper = await mountView({ role: ADMIN_USER, lead: OWNED_LEAD })
+    const store = useLeadsStore()
+    const errSpy = vi.spyOn(Message, 'error')
+    const reloadSpy = vi.spyOn(store, 'loadLead')
+    server.use(transferSameOwner('目标销售与当前归属相同'))
+
+    await wrapper.find('.transfer-open').trigger('click')
+    await flushPromises()
+    await clickRadio(wrapper, '.transfer-target', '赵磊')
+    await wrapper.find('.transfer-confirm').trigger('click')
+    await flushPromises()
+
+    expect(errSpy.mock.calls.some((c) => String(c[0]).includes('当前归属相同'))).toBe(true)
+    expect(reloadSpy).toHaveBeenCalledWith(100)
+  })
+
+  it('归属操作遇 LEAD_ENDED_READONLY 提示并刷新只读态', async () => {
+    const wrapper = await mountView({ role: ADMIN_USER, lead: POOL_LEAD })
+    const store = useLeadsStore()
+    const errSpy = vi.spyOn(Message, 'error')
+    const reloadSpy = vi.spyOn(store, 'loadLead')
+    server.use(ownershipEndedReadonly('assign'))
+
+    await wrapper.find('.assign-open').trigger('click')
+    await flushPromises()
+    await clickRadio(wrapper, '.assign-target', '林雨')
+    await wrapper.find('.assign-confirm').trigger('click')
+    await flushPromises()
+
+    expect(errSpy).toHaveBeenCalled()
+    expect(reloadSpy).toHaveBeenCalledWith(100)
   })
 })

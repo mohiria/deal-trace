@@ -15,6 +15,10 @@ import {
   poolList,
   progressList,
   releaseSuccess,
+  assignSuccess,
+  assignAlreadyOwned,
+  recallSuccess,
+  transferSuccess,
 } from '../test/msw/handlers'
 import { useLeadsStore } from './leads'
 
@@ -83,6 +87,48 @@ describe('release（退回联动）', () => {
     await store.release(SAMPLE_LEAD.id, '客户暂无预算')
 
     expect(store.myLeads.find((l) => l.id === SAMPLE_LEAD.id)).toBeUndefined()
+  })
+})
+
+describe('归属动作（assign/recall/transfer 刷新 currentLead）', () => {
+  it('assign 成功后刷新 currentLead 归属', async () => {
+    const pool = { ...SAMPLE_LEAD, ownerSalesId: null }
+    server.use(leadDetail(pool), assignSuccess({ ...SAMPLE_LEAD, ownerSalesId: 2 }))
+    const store = useLeadsStore()
+    await store.loadLead(100)
+    expect(store.currentLead?.ownerSalesId).toBeNull()
+
+    await store.assign(100, 2)
+
+    expect(store.currentLead?.ownerSalesId).toBe(2)
+  })
+
+  it('recall 成功后 currentLead 归属清空', async () => {
+    server.use(leadDetail(SAMPLE_LEAD), recallSuccess({ ...SAMPLE_LEAD, ownerSalesId: null }))
+    const store = useLeadsStore()
+    await store.loadLead(100)
+
+    await store.recall(100)
+
+    expect(store.currentLead?.ownerSalesId).toBeNull()
+  })
+
+  it('transfer 成功后 currentLead 归属更新为新 Sales', async () => {
+    server.use(leadDetail(SAMPLE_LEAD), transferSuccess({ ...SAMPLE_LEAD, ownerSalesId: 3 }))
+    const store = useLeadsStore()
+    await store.loadLead(100)
+
+    await store.transfer(100, 3)
+
+    expect(store.currentLead?.ownerSalesId).toBe(3)
+  })
+
+  it('归属动作收 ApiError 透传不吞', async () => {
+    server.use(leadDetail({ ...SAMPLE_LEAD, ownerSalesId: 2 }), assignAlreadyOwned())
+    const store = useLeadsStore()
+    await store.loadLead(100)
+
+    await expect(store.assign(100, 5)).rejects.toBeInstanceOf(ApiError)
   })
 })
 

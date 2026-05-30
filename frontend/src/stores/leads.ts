@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import type { LeadView, PoolLeadView, ProgressLogView } from '../api/leads'
 import {
   addProgress as apiAddProgress,
+  assignLead as apiAssignLead,
   changeStage as apiChangeStage,
   claimLead as apiClaimLead,
   fetchAllLeads,
@@ -11,7 +12,9 @@ import {
   fetchPool,
   fetchProgress,
   loseLead as apiLoseLead,
+  recallLead as apiRecallLead,
   releaseLead as apiReleaseLead,
+  transferLead as apiTransferLead,
   winLead as apiWinLead,
 } from '../api/leads'
 
@@ -124,6 +127,33 @@ export const useLeadsStore = defineStore('leads', () => {
     return lead
   }
 
+  /** Admin 分配公海线索：刷新 currentLead 归属。 */
+  async function assign(id: number, salesId: number): Promise<LeadView> {
+    const lead = await apiAssignLead(id, salesId)
+    if (currentLead.value?.id === id) {
+      currentLead.value = lead
+    }
+    return lead
+  }
+
+  /** Admin 回收名下线索至公海：刷新 currentLead 归属。 */
+  async function recall(id: number): Promise<LeadView> {
+    const lead = await apiRecallLead(id)
+    if (currentLead.value?.id === id) {
+      currentLead.value = lead
+    }
+    return lead
+  }
+
+  /** Admin 转移名下线索给另一 Sales：刷新 currentLead 归属。 */
+  async function transfer(id: number, salesId: number): Promise<LeadView> {
+    const lead = await apiTransferLead(id, salesId)
+    if (currentLead.value?.id === id) {
+      currentLead.value = lead
+    }
+    return lead
+  }
+
   return {
     myLeads,
     allLeads,
@@ -143,5 +173,8 @@ export const useLeadsStore = defineStore('leads', () => {
     changeStage,
     winLead,
     loseLead,
+    assign,
+    recall,
+    transfer,
   }
 })
