@@ -161,6 +161,3 @@ playwright/.cache/
 *.rej
 tmp/
 .tmp/
-
-# 一次性演示数据脚本生成的本地清理 SQL，可能包含环境相关操作。
-seed-cleanup.sql
