@@ -21,10 +21,11 @@ function buildRouter(): Router {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/my-leads', name: 'my-leads', component: MyLeadsView },
-      { path: '/leads/:id', name: 'lead-detail', component: Stub },
-    ],
-  })
+    { path: '/my-leads', name: 'my-leads', component: MyLeadsView },
+    { path: '/leads/:id', name: 'lead-detail', component: Stub },
+    { path: '/customers', name: 'customers', component: Stub },
+  ],
+})
 }
 
 async function mountView(): Promise<{ wrapper: VueWrapper; router: Router }> {
@@ -80,5 +81,37 @@ describe('空态', () => {
     store.currentUser = SALES_USER
     const { wrapper } = await mountView()
     expect(wrapper.text()).toContain('暂无线索')
+  })
+})
+
+describe('refine my leads list iteration', () => {
+  it('提供新增客户和新增线索入口', async () => {
+    server.use(mineLeads([SAMPLE_LEAD]))
+    const store = useAuthStore()
+    store.currentUser = SALES_USER
+    const { wrapper } = await mountView()
+
+    expect(wrapper.find('.create-customer-open').exists()).toBe(true)
+    expect(wrapper.find('.create-lead-open').exists()).toBe(true)
+  })
+
+  it('支持搜索和标准分页', async () => {
+    const rows = Array.from({ length: 12 }, (_, index) => ({
+      ...SAMPLE_LEAD,
+      id: 800 + index,
+      customerName: index === 11 ? '星河我的线索' : `我的分页客户${index + 1}`,
+    }))
+    server.use(mineLeads(rows))
+    const store = useAuthStore()
+    store.currentUser = SALES_USER
+    const { wrapper } = await mountView()
+
+    expect(wrapper.find('[data-test="list-pagination"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('星河我的线索')
+
+    await wrapper.find('.list-search').setValue('星河')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('星河我的线索')
   })
 })

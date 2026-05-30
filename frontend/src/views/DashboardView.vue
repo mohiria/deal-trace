@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { fetchDashboard } from '../api/dashboard'
@@ -9,10 +9,11 @@ import { useAuthStore } from '../stores/auth'
 import { useLeadsStore } from '../stores/leads'
 import { ApiError } from '../api/client'
 import type { LeadView, PoolLeadView } from '../api/leads'
-import { BUSINESS_TYPES, isClosed } from '../utils/lead'
+import { BUSINESS_TYPES } from '../utils/lead'
 import LeadDetailPanel from '../components/LeadDetailPanel.vue'
+import CreateLeadModal from '../components/CreateLeadModal.vue'
 
-type LeadTab = 'mine' | 'pool' | 'ended'
+type LeadTab = 'mine' | 'pool' | 'all'
 type WorkbenchRow = (LeadView | PoolLeadView) & { ownerLabel?: string }
 
 const router = useRouter()
@@ -29,6 +30,9 @@ const typeFilter = ref('')
 const stageFilter = ref('')
 const activeLeadId = ref<number | null>(null)
 const claimingId = ref<number | null>(null)
+const createLeadVisible = ref(false)
+const currentPage = ref(1)
+const pageSize = 10
 
 async function loadDashboard() {
   loading.value = true
@@ -43,13 +47,18 @@ async function loadDashboard() {
   }
 }
 
-function goCreate() {
+function goCreateCustomer() {
   void router.push({ name: 'customers' })
+}
+
+function openCreateLead() {
+  createLeadVisible.value = true
 }
 
 function selectTab(tab: LeadTab) {
   activeTab.value = tab
   activeLeadId.value = null
+  currentPage.value = 1
 }
 
 function openLead(id: number) {
@@ -60,28 +69,17 @@ function closeLeadDrawer() {
   activeLeadId.value = null
 }
 
-function currentMonthEnded(rows: LeadView[]): LeadView[] {
-  const now = new Date()
-  const month = now.getMonth()
-  const year = now.getFullYear()
-  return rows.filter((lead) => {
-    const raw = lead.wonAt ?? lead.lostAt
-    if (!raw || !isClosed(lead.stage)) {
-      return false
-    }
-    const date = new Date(raw)
-    return date.getFullYear() === year && date.getMonth() === month
-  })
-}
-
 const baseOwnedRows = computed<LeadView[]>(() => (auth.isAdmin ? leads.allLeads : leads.myLeads))
 
 const currentRows = computed<WorkbenchRow[]>(() => {
   if (activeTab.value === 'pool') {
     return leads.pool.map((lead) => ({ ...lead, ownerLabel: '公海' }))
   }
-  if (activeTab.value === 'ended') {
-    return currentMonthEnded(baseOwnedRows.value).map((lead) => ({ ...lead, ownerLabel: ownerText(lead) }))
+  if (activeTab.value === 'all') {
+    return [
+      ...baseOwnedRows.value.map((lead) => ({ ...lead, ownerLabel: ownerText(lead) })),
+      ...leads.pool.map((lead) => ({ ...lead, ownerLabel: '公海' })),
+    ]
   }
   return baseOwnedRows.value.map((lead) => ({ ...lead, ownerLabel: ownerText(lead) }))
 })
@@ -114,8 +112,17 @@ const filteredRows = computed(() => {
 const tabCounts = computed(() => ({
   mine: baseOwnedRows.value.length,
   pool: leads.pool.length,
-  ended: currentMonthEnded(baseOwnedRows.value).length,
+  all: baseOwnedRows.value.length + leads.pool.length,
 }))
+
+const pagedRows = computed(() => {
+  const start = (currentPage.value - 1) * pageSize
+  return filteredRows.value.slice(start, start + pageSize)
+})
+
+watch([search, typeFilter, stageFilter], () => {
+  currentPage.value = 1
+})
 
 const metricCards = computed(() => {
   if (!data.value) {
@@ -183,6 +190,15 @@ async function onClaim(id: number) {
   }
 }
 
+async function refreshLeadListsAfterCreate() {
+  if (auth.isAdmin) {
+    await leads.loadAllLeads()
+  } else {
+    await leads.loadMyLeads()
+  }
+  await leads.loadPool()
+}
+
 function ownerText(lead: Pick<LeadView, 'ownerSalesId'>): string {
   return lead.ownerSalesId == null ? '公海' : `销售 #${lead.ownerSalesId}`
 }
@@ -226,8 +242,8 @@ onMounted(() => {
           <p>按当前归属、业务类型和阶段快速推进业务线索。</p>
         </div>
         <div class="top-actions">
-          <a-button class="quick-new-customer" @click="goCreate">新建客户</a-button>
-          <a-button class="quick-new-lead" type="primary" @click="goCreate">新建业务线索</a-button>
+          <a-button class="quick-new-customer" @click="goCreateCustomer">新增客户</a-button>
+          <a-button class="quick-new-lead" type="primary" @click="openCreateLead">新增线索</a-button>
         </div>
       </header>
 
@@ -243,7 +259,7 @@ onMounted(() => {
         <article v-for="metric in metricCards" :key="metric.key" class="metric">
           <div class="metric-head">
             <span>{{ metric.title }}</span>
-            <div class="spark" aria-hidden="true"></div>
+            <span class="metric-mark" :class="metric.tone" aria-hidden="true"></span>
           </div>
           <div class="metric-value" :data-test="metric.test">{{ metric.value }}</div>
           <div class="metric-foot">
@@ -257,16 +273,16 @@ onMounted(() => {
         <header class="workbench-head">
           <div class="tabs" aria-label="线索视图">
             <button class="tab" :class="{ active: activeTab === 'mine' }" type="button" @click="selectTab('mine')">
-              {{ auth.isAdmin ? '全部线索' : '我的线索' }}
+              我的线索
               <span>{{ tabCounts.mine }}</span>
             </button>
             <button class="tab" :class="{ active: activeTab === 'pool' }" type="button" @click="selectTab('pool')">
               公海线索
               <span>{{ tabCounts.pool }}</span>
             </button>
-            <button class="tab" :class="{ active: activeTab === 'ended' }" type="button" @click="selectTab('ended')">
-              本月结束
-              <span>{{ tabCounts.ended }}</span>
+            <button class="tab" :class="{ active: activeTab === 'all' }" type="button" @click="selectTab('all')">
+              全部线索
+              <span>{{ tabCounts.all }}</span>
             </button>
           </div>
           <div class="filters">
@@ -296,7 +312,7 @@ onMounted(() => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="lead in filteredRows" :key="lead.id" :class="{ selected: activeLeadId === lead.id }">
+              <tr v-for="lead in pagedRows" :key="lead.id" :class="{ selected: activeLeadId === lead.id }">
                 <td>
                   <button class="lead-link" type="button" @click="openLead(lead.id)">
                     <strong>{{ lead.customerName ?? '—' }}</strong>
@@ -329,6 +345,9 @@ onMounted(() => {
             </tbody>
           </table>
         </div>
+        <div v-if="filteredRows.length > pageSize" class="pagination-bar" data-test="lead-pagination">
+          <a-pagination v-model:current="currentPage" :total="filteredRows.length" :page-size="pageSize" show-total />
+        </div>
       </section>
     </main>
 
@@ -344,6 +363,7 @@ onMounted(() => {
       </button>
       <LeadDetailPanel :key="activeLeadId" :lead-id="activeLeadId" />
     </aside>
+    <CreateLeadModal v-model:visible="createLeadVisible" @created="refreshLeadListsAfterCreate" />
   </div>
 </template>
 
@@ -356,7 +376,7 @@ onMounted(() => {
 }
 
 .hub.has-drawer {
-  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-columns: minmax(0, 1fr) 440px;
 }
 
 .hub-main {
@@ -447,13 +467,30 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
-.spark {
-  height: 28px;
-  width: 72px;
-  border-radius: 7px;
-  background:
-    linear-gradient(135deg, rgba(37, 99, 255, 0.12), rgba(15, 159, 110, 0.12)),
-    repeating-linear-gradient(90deg, transparent 0 8px, rgba(37, 99, 255, 0.18) 8px 10px);
+.metric-mark {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 4px rgba(37, 99, 255, 0.08);
+}
+
+.metric-mark.blue {
+  background: #2563ff;
+}
+
+.metric-mark.green {
+  background: var(--dt-green);
+  box-shadow: 0 0 0 4px rgba(15, 159, 110, 0.1);
+}
+
+.metric-mark.orange {
+  background: var(--dt-orange);
+  box-shadow: 0 0 0 4px rgba(217, 119, 6, 0.1);
+}
+
+.metric-mark.red {
+  background: var(--dt-red);
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.1);
 }
 
 .workbench-card {
@@ -654,11 +691,19 @@ tr.selected td {
   padding: 36px;
 }
 
+.pagination-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 16px;
+  border-top: 1px solid #eef1f6;
+  background: #fff;
+}
+
 .detail-drawer {
   background: #fff;
   border-left: 1px solid var(--dt-line);
   border-radius: var(--dt-radius);
-  padding: 20px;
+  padding: 24px;
   min-height: calc(100vh - 112px);
   max-height: calc(100vh - 48px);
   position: sticky;
@@ -669,8 +714,8 @@ tr.selected td {
 
 .drawer-close {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: 18px;
+  right: 18px;
   width: 30px;
   height: 30px;
   border-radius: 8px;

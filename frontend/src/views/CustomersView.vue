@@ -1,15 +1,11 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import type { TableColumnData } from '@arco-design/web-vue'
-import { useAuthStore } from '../stores/auth'
 import { ApiError } from '../api/client'
 import { searchCustomers, createCustomer } from '../api/customers'
 import type { CustomerView } from '../api/customers'
-import { createLead, duplicateCheck } from '../api/leads'
-import type { DuplicateCheckResult } from '../api/leads'
-import { BUSINESS_TYPES, isValidContactPhone } from '../utils/lead'
-import CustomerSelect from '../components/CustomerSelect.vue'
+import CreateLeadModal from '../components/CreateLeadModal.vue'
 
 /**
  * 客户管理（spec R1 / R2 / R4）：客户列表 / 搜索、创建客户、在选定客户下新建线索（含查重预检）。
@@ -17,12 +13,12 @@ import CustomerSelect from '../components/CustomerSelect.vue'
  */
 const props = withDefaults(defineProps<{ debounceMs?: number }>(), { debounceMs: 300 })
 
-const auth = useAuthStore()
-
 // ---- 列表与搜索（R1）----
 const customers = ref<CustomerView[]>([])
 const keyword = ref('')
 const loading = ref(false)
+const currentPage = ref(1)
+const pageSize = 10
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const columns: TableColumnData[] = [
@@ -30,6 +26,11 @@ const columns: TableColumnData[] = [
   { title: '统一社会信用代码', dataIndex: 'usci' },
   { title: '创建时间', dataIndex: 'createdAt' },
 ]
+
+const pagedCustomers = computed(() => {
+  const start = (currentPage.value - 1) * pageSize
+  return customers.value.slice(start, start + pageSize)
+})
 
 async function loadCustomers(kw?: string) {
   loading.value = true
@@ -49,6 +50,7 @@ function onSearchInput() {
     clearTimeout(searchTimer)
   }
   searchTimer = setTimeout(() => {
+    currentPage.value = 1
     void loadCustomers(keyword.value)
   }, props.debounceMs)
 }
@@ -88,103 +90,10 @@ async function onCreateCustomer() {
   }
 }
 
-// ---- 新建线索 + 查重预检（R4）----
 const leadVisible = ref(false)
-const selectedCustomerId = ref<number | null>(null)
-const selectedCustomer = ref<CustomerView | null>(null)
-const leadForm = ref({ businessType: '', contactName: '', contactPhone: '', leadSource: '' })
-const ownerMode = ref<'self' | 'pool'>('self')
-const dupResult = ref<DuplicateCheckResult | null>(null)
-const submittingLead = ref(false)
 
 function openLeadModal() {
-  selectedCustomerId.value = null
-  selectedCustomer.value = null
-  leadForm.value = { businessType: '', contactName: '', contactPhone: '', leadSource: '' }
-  ownerMode.value = 'self'
-  dupResult.value = null
   leadVisible.value = true
-}
-
-function onCustomerSelected(customer: CustomerView) {
-  selectedCustomer.value = customer
-}
-
-/** 客户 + 业务类型齐备即触发查重预检（design D5）。 */
-watch(
-  () => [selectedCustomerId.value, leadForm.value.businessType] as const,
-  async ([id, type]) => {
-    if (id == null || !type) {
-      dupResult.value = null
-      return
-    }
-    try {
-      dupResult.value = await duplicateCheck(id, type)
-    } catch (error) {
-      dupResult.value = null
-      if (error instanceof ApiError) {
-        Message.error(error.message)
-      }
-    }
-  },
-)
-
-function blockingMessage(reason: string | null): string {
-  if (reason === 'DUPLICATE_ACTIVE_LEAD') {
-    return '该客户在本年度该业务类型下已有进行中线索，不可重复创建。'
-  }
-  if (reason === 'DUPLICATE_WON_LEAD') {
-    return '该客户在本年度该业务类型下已有已赢单线索，不可重复创建。'
-  }
-  return '该业务线索不可重复创建。'
-}
-
-async function onCreateLead() {
-  // 即时校验（design D7）：客户 / 业务类型 / 联系人 / 联系电话格式。
-  if (selectedCustomerId.value == null) {
-    Message.warning('请先选择客户')
-    return
-  }
-  if (!leadForm.value.businessType) {
-    Message.warning('请选择业务类型')
-    return
-  }
-  if (leadForm.value.contactName.trim() === '') {
-    Message.warning('请填写联系人')
-    return
-  }
-  if (!isValidContactPhone(leadForm.value.contactPhone)) {
-    Message.warning('联系电话格式不正确')
-    return
-  }
-  // 预检阻塞：不发创建请求。
-  if (dupResult.value && dupResult.value.canCreate === false) {
-    Message.warning(blockingMessage(dupResult.value.blockingReason))
-    return
-  }
-
-  submittingLead.value = true
-  try {
-    const source = leadForm.value.leadSource.trim()
-    await createLead({
-      customerId: selectedCustomerId.value,
-      businessType: leadForm.value.businessType,
-      contactName: leadForm.value.contactName.trim(),
-      contactPhone: leadForm.value.contactPhone.trim(),
-      ...(source ? { leadSource: source } : {}),
-      ...(!auth.isAdmin && ownerMode.value === 'pool' ? { assignToPool: true } : {}),
-    })
-    leadVisible.value = false
-    Message.success('线索创建成功')
-  } catch (error) {
-    if (error instanceof ApiError) {
-      Message.error(error.message)
-    } else {
-      Message.error('创建失败，请稍后重试')
-    }
-  } finally {
-    submittingLead.value = false
-  }
 }
 
 onMounted(() => {
@@ -214,12 +123,10 @@ onMounted(() => {
         autocomplete="off"
         @input="onSearchInput"
       />
-      <span class="tag blue">Table</span>
-      <span class="tag orange">Modal</span>
     </div>
 
     <a-table
-      :data="customers"
+      :data="pagedCustomers"
       :columns="columns"
       :pagination="false"
       :loading="loading"
@@ -230,6 +137,9 @@ onMounted(() => {
         <div class="customers-empty">无匹配客户</div>
       </template>
     </a-table>
+    <div v-if="customers.length > pageSize" class="pagination-bar" data-test="list-pagination">
+      <a-pagination v-model:current="currentPage" :total="customers.length" :page-size="pageSize" show-total />
+    </div>
 
     <!-- 创建客户 -->
     <a-modal
@@ -255,69 +165,7 @@ onMounted(() => {
       </template>
     </a-modal>
 
-    <!-- 新建线索 -->
-    <a-modal
-      v-model:visible="leadVisible"
-      title="新建业务线索"
-      :render-to-body="false"
-      :footer="false"
-    >
-      <a-form :model="leadForm" layout="vertical" @submit.prevent>
-        <a-form-item label="客户" required>
-          <CustomerSelect
-            v-model="selectedCustomerId"
-            :debounce-ms="props.debounceMs"
-            @select="onCustomerSelected"
-          />
-        </a-form-item>
-        <a-form-item label="业务类型" required>
-          <a-radio-group v-model="leadForm.businessType" class="lead-type">
-            <a-radio v-for="t in BUSINESS_TYPES" :key="t" :value="t">{{ t }}</a-radio>
-          </a-radio-group>
-        </a-form-item>
-
-        <div v-if="dupResult && dupResult.canCreate === false" class="lead-block">
-          {{ blockingMessage(dupResult.blockingReason) }}
-        </div>
-
-        <div v-if="dupResult && dupResult.historicalLost.length > 0" class="historical-lost">
-          <p class="historical-lost-title">该客户该业务类型历史流失记录：</p>
-          <ul>
-            <li v-for="(h, i) in dupResult.historicalLost" :key="i" class="historical-lost-item">
-              <span class="hl-time">{{ h.lostAt }}</span>
-              <span class="hl-reason">{{ h.loseReason }}</span>
-              <span v-if="h.loseNote" class="hl-note">{{ h.loseNote }}</span>
-            </li>
-          </ul>
-        </div>
-
-        <a-form-item label="联系人" required>
-          <a-input v-model="leadForm.contactName" class="lead-contact-name" placeholder="联系人姓名（必填）" />
-        </a-form-item>
-        <a-form-item label="联系电话" required>
-          <a-input
-            v-model="leadForm.contactPhone"
-            class="lead-contact-phone"
-            placeholder="手机号或座机（必填）"
-          />
-        </a-form-item>
-        <a-form-item label="线索来源">
-          <a-input v-model="leadForm.leadSource" class="lead-source" placeholder="线索来源（选填）" />
-        </a-form-item>
-        <a-form-item v-if="!auth.isAdmin" label="归属">
-          <a-radio-group v-model="ownerMode" class="lead-owner">
-            <a-radio value="self">归属自己</a-radio>
-            <a-radio value="pool">放入公海</a-radio>
-          </a-radio-group>
-        </a-form-item>
-      </a-form>
-      <div class="lead-footer">
-        <a-button @click="leadVisible = false">取消</a-button>
-        <a-button class="lead-confirm" type="primary" :loading="submittingLead" @click="onCreateLead">
-          创建线索
-        </a-button>
-      </div>
-    </a-modal>
+    <CreateLeadModal v-model:visible="leadVisible" :debounce-ms="props.debounceMs" />
   </section>
 </template>
 
@@ -404,59 +252,9 @@ onMounted(() => {
   font-size: 13px;
 }
 
-.tag {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 9px;
-  border-radius: 7px;
-  font-weight: 800;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.tag.blue {
-  background: var(--dt-brand-soft, #eaf0ff);
-  color: #1d4ed8;
-}
-
-.tag.orange {
-  background: var(--dt-orange-soft, #fff4df);
-  color: var(--dt-orange, #d97706);
-}
-
-.lead-block {
-  margin: 8px 0;
-  padding: 8px 12px;
-  border-radius: var(--dt-radius-sm, 6px);
-  background: var(--dt-danger-bg, #fff1f0);
-  color: var(--dt-danger, #c0341d);
-  font-size: 13px;
-}
-
-.historical-lost {
-  margin: 8px 0;
-  padding: 8px 12px;
-  border-radius: var(--dt-radius-sm, 6px);
-  background: var(--dt-warning-bg, #fffaf0);
-  color: var(--dt-muted, #70778c);
-  font-size: 13px;
-}
-
-.historical-lost-title {
-  margin: 0 0 4px;
-  font-weight: 600;
-}
-
-.historical-lost-item {
-  display: flex;
-  gap: 12px;
-}
-
-.lead-footer {
+.pagination-bar {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 12px;
+  padding: 14px 0 0;
 }
 </style>

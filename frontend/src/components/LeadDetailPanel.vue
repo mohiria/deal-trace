@@ -55,7 +55,8 @@ const transferCandidates = computed(() =>
 const stageRail = computed(() => {
   const current = lead.value?.stage
   const currentIndex = ACTIVE_STAGES.findIndex((stage) => stage === current)
-  return ACTIVE_STAGES.map((stage, index) => ({
+  const visibleStages = currentIndex >= 0 ? ACTIVE_STAGES.slice(0, currentIndex + 1) : current ? [current] : []
+  return visibleStages.map((stage, index) => ({
     stage,
     state: current === stage ? 'current' : currentIndex >= 0 && index < currentIndex ? 'done' : 'pending',
   }))
@@ -230,7 +231,6 @@ onMounted(() => {
         <h2 class="detail-title">{{ lead.customerName ?? '线索详情' }}</h2>
         <span class="detail-sub">{{ lead.businessType }} · {{ lead.businessYear }} 年度</span>
       </div>
-      <a-tag :color="closed ? 'gray' : 'arcoblue'" class="detail-stage">{{ lead.stage }}</a-tag>
     </header>
 
     <section class="panel soft">
@@ -562,7 +562,7 @@ onMounted(() => {
 
 .stage-rail {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
   gap: 7px;
 }
 

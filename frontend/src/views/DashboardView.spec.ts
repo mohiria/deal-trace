@@ -48,6 +48,8 @@ function buildRouter(): Router {
       { path: '/', name: 'workbench', component: DashboardView },
       { path: '/login', name: 'login', component: Stub },
       { path: '/customers', name: 'customers', component: Stub },
+      { path: '/my-leads', name: 'my-leads', component: Stub },
+      { path: '/public-pool', name: 'public-pool', component: Stub },
     ],
   })
 }
@@ -136,6 +138,14 @@ describe('原型化指标区', () => {
     expect(wrapper.find('[data-test="metric-loss-rate"]').text()).toContain('--')
     expect(wrapper.find('[data-test="metric-won-amount"]').text()).toContain('¥0')
   })
+
+  it('指标卡不展示旧 spark 图形', async () => {
+    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
+    const { wrapper } = await mountView()
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="dashboard-metrics"] .spark').exists()).toBe(false)
+  })
 })
 
 describe('三 Tab 线索工作区', () => {
@@ -186,7 +196,7 @@ describe('三 Tab 线索工作区', () => {
     expect(warnSpy.mock.calls.some((c) => String(c[0]).includes('已被认领'))).toBe(true)
   })
 
-  it('本月结束 Tab 只展示当前月份赢单或流失线索', async () => {
+  it('全部线索 Tab 不再按本月结束过滤', async () => {
     const now = new Date()
     const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-10T09:00:00`
     const won: LeadView = { ...SAMPLE_LEAD, id: 401, customerName: '本月赢单客户', stage: '已赢单', wonAt: current }
@@ -196,13 +206,13 @@ describe('三 Tab 线索工作区', () => {
     const { wrapper } = await mountView({ mine: [won, lost, old] })
     await flushPromises()
 
-    await wrapper.findAll('.tab').find((t) => t.text().includes('本月结束'))!.trigger('click')
+    await wrapper.findAll('.tab').find((t) => t.text().includes('全部线索'))!.trigger('click')
     await flushPromises()
 
     const text = wrapper.find('[data-test="workbench-leads"]').text()
     expect(text).toContain('本月赢单客户')
     expect(text).toContain('本月流失客户')
-    expect(text).not.toContain('历史结束客户')
+    expect(text).toContain('历史结束客户')
   })
 
   it('过滤器按关键词、业务类型和阶段筛选当前 Tab', async () => {
@@ -304,5 +314,64 @@ describe('lead drawer close behavior', () => {
 
     expect(wrapper.find('[data-test="lead-drawer"]').exists()).toBe(false)
     expect(wrapper.find('tr.selected').exists()).toBe(false)
+  })
+})
+
+describe('refine lead list iteration', () => {
+  it('tab 顺序为我的线索、公海线索、全部线索', async () => {
+    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
+    const { wrapper } = await mountView()
+    await flushPromises()
+
+    expect(wrapper.findAll('.tab').map((tab) => tab.text().replace(/\d+/g, '').trim())).toEqual([
+      '我的线索',
+      '公海线索',
+      '全部线索',
+    ])
+  })
+
+  it('全部线索合并我的线索与公海线索', async () => {
+    const mine: LeadView = { ...SAMPLE_LEAD, id: 601, customerName: '我的线索客户' }
+    const pool: PoolLeadView = { ...SAMPLE_POOL_LEAD, id: 602, customerName: '公海线索客户' }
+    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
+    const { wrapper } = await mountView({ mine: [mine], pool: [pool] })
+    await flushPromises()
+
+    await wrapper.findAll('.tab').find((t) => t.text().includes('全部线索'))!.trigger('click')
+    await flushPromises()
+
+    const text = wrapper.find('[data-test="workbench-leads"]').text()
+    expect(text).toContain('我的线索客户')
+    expect(text).toContain('公海线索客户')
+  })
+
+  it('工作台列表支持标准分页且搜索后回到第一页', async () => {
+    const rows = Array.from({ length: 12 }, (_, index) => ({
+      ...SAMPLE_LEAD,
+      id: 700 + index,
+      customerName: index === 11 ? '星河分页客户' : `分页客户${index + 1}`,
+    }))
+    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
+    const { wrapper } = await mountView({ mine: rows })
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="lead-pagination"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="workbench-leads"]').text()).not.toContain('星河分页客户')
+
+    await wrapper.find('.search').setValue('星河')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="workbench-leads"]').text()).toContain('星河分页客户')
+  })
+
+  it('新增线索入口打开统一新建线索弹窗', async () => {
+    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
+    const { wrapper } = await mountView()
+    await flushPromises()
+
+    await wrapper.find('.quick-new-lead').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="create-lead-modal"]').exists()).toBe(true)
   })
 })
