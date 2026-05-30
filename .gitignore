@@ -44,6 +44,7 @@ $RECYCLE.BIN/
 
 # Obsidian 笔记缓存（与本项目无关的工作流文件）
 .obsidian
+PPT/
 
 # omc skills 本地缓存（与项目无关的本地开发产物）
 .omc/
