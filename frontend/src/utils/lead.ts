@@ -29,6 +29,9 @@ export const LOSE_REASONS: readonly string[] = ['价格过高', '选择竞品', 
 /** 流失说明必填的触发原因。 */
 export const LOSE_REASON_OTHER = '其他'
 
+/** 业务类型枚举（镜像后端 `BusinessType.dbValue`，lead spec）。 */
+export const BUSINESS_TYPES: readonly string[] = ['BIM咨询', 'BIM培训', '定制开发']
+
 /** 已结束（已赢单 / 已流失）线索为只读（PRD §7.7.7–§7.7.9）。集中派生，避免各入口各判。 */
 export function isClosed(stage: string | null | undefined): boolean {
   return stage === LEAD_STAGE.WON || stage === LEAD_STAGE.LOST
@@ -48,6 +51,26 @@ export function isValidAmount(raw: string | null | undefined): boolean {
   }
   // 大于 0：排除 "0"、"0.00" 等
   return Number(trimmed) > 0
+}
+
+/**
+ * 联系电话即时校验（design D7 / lead spec R3）。前端为体验前置，后端为权威兜底。
+ * - 11 位手机号：第 1 位 `1`、第 2 位 `3-9`、其余 9 位数字。
+ * - 座机：可选区号（`0` 开头 3-4 位）+ `-` + 7-8 位号码 + 可选分机；无区号的 7-8 位号码亦可。
+ * - 海外格式（含 `+`）MVP 不支持。
+ */
+export function isValidContactPhone(raw: string | null | undefined): boolean {
+  if (raw == null) {
+    return false
+  }
+  const trimmed = raw.trim()
+  if (trimmed === '') {
+    return false
+  }
+  const mobile = /^1[3-9]\d{9}$/
+  // 座机：可选 (0xx 或 0xxx 区号 + -) + 7-8 位号码 + 可选 (- 分机 1-6 位)
+  const landline = /^(0\d{2,3}-)?\d{7,8}(-\d{1,6})?$/
+  return mobile.test(trimmed) || landline.test(trimmed)
 }
 
 /**

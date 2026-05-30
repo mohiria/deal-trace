@@ -5,6 +5,7 @@ import {
   formatAmount,
   isClosed,
   isValidAmount,
+  isValidContactPhone,
 } from './lead'
 
 describe('isClosed（D4）', () => {
@@ -63,5 +64,36 @@ describe('formatAmount（PRD §7.11.1.4 千分位）', () => {
     expect(formatAmount('')).toBe('')
     expect(formatAmount(null)).toBe('')
     expect(formatAmount('abc')).toBe('abc')
+  })
+})
+
+describe('isValidContactPhone（D7 / lead spec R3）', () => {
+  it('合法 11 位手机号', () => {
+    expect(isValidContactPhone('13812345678')).toBe(true)
+    expect(isValidContactPhone('19987654321')).toBe(true)
+    expect(isValidContactPhone(' 13812345678 ')).toBe(true)
+  })
+
+  it('非法手机号：首位非 1 / 第二位非 3-9 / 长度错', () => {
+    expect(isValidContactPhone('23812345678')).toBe(false)
+    expect(isValidContactPhone('12812345678')).toBe(false)
+    expect(isValidContactPhone('1381234567')).toBe(false)
+    expect(isValidContactPhone('138123456789')).toBe(false)
+  })
+
+  it('合法座机：含区号 / 含分机 / 无区号', () => {
+    expect(isValidContactPhone('010-12345678')).toBe(true)
+    expect(isValidContactPhone('0571-12345678')).toBe(true)
+    expect(isValidContactPhone('0571-12345678-123')).toBe(true)
+    expect(isValidContactPhone('12345678')).toBe(true)
+  })
+
+  it('非法：空 / 字母 / 太短 / 海外格式', () => {
+    expect(isValidContactPhone('')).toBe(false)
+    expect(isValidContactPhone('   ')).toBe(false)
+    expect(isValidContactPhone('abc')).toBe(false)
+    expect(isValidContactPhone('123')).toBe(false)
+    expect(isValidContactPhone('+1-555-1234')).toBe(false)
+    expect(isValidContactPhone(null)).toBe(false)
   })
 })
