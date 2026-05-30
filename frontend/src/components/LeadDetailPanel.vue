@@ -52,6 +52,15 @@ const transferCandidates = computed(() =>
   accounts.enabledSales.filter((s) => s.id !== lead.value?.ownerSalesId),
 )
 
+const stageRail = computed(() => {
+  const current = lead.value?.stage
+  const currentIndex = ACTIVE_STAGES.findIndex((stage) => stage === current)
+  return ACTIVE_STAGES.map((stage, index) => ({
+    stage,
+    state: current === stage ? 'current' : currentIndex >= 0 && index < currentIndex ? 'done' : 'pending',
+  }))
+})
+
 const targetStages = computed(() => ACTIVE_STAGES.filter((s) => s !== lead.value?.stage))
 
 // 追加进度表单
@@ -224,25 +233,62 @@ onMounted(() => {
       <a-tag :color="closed ? 'gray' : 'arcoblue'" class="detail-stage">{{ lead.stage }}</a-tag>
     </header>
 
-    <a-descriptions :column="2" bordered class="detail-desc">
-      <a-descriptions-item label="客户名称">{{ lead.customerName ?? '—' }}</a-descriptions-item>
-      <a-descriptions-item label="统一社会信用代码">{{ lead.customerUsci ?? '—' }}</a-descriptions-item>
-      <a-descriptions-item label="联系人">{{ lead.contactName ?? '—' }}</a-descriptions-item>
-      <a-descriptions-item label="联系电话">{{ lead.contactPhone ?? '—' }}</a-descriptions-item>
-      <a-descriptions-item label="线索来源">{{ lead.leadSource ?? '—' }}</a-descriptions-item>
-      <a-descriptions-item label="当前归属">
-        {{ lead.ownerSalesId == null ? '公海' : `销售 #${lead.ownerSalesId}` }}
-      </a-descriptions-item>
-      <a-descriptions-item label="最后跟踪">{{ lead.lastTrackedAt ?? '尚未跟踪' }}</a-descriptions-item>
-      <a-descriptions-item label="创建时间">{{ lead.createdAt ?? '—' }}</a-descriptions-item>
-    </a-descriptions>
+    <section class="panel soft">
+      <div class="panel-title">
+        <span>线索阶段</span>
+        <span class="stage-current">{{ lead.stage }}</span>
+      </div>
+      <div class="stage-rail">
+        <div v-for="item in stageRail" :key="item.stage" class="stage-step" :class="item.state">
+          {{ item.stage }}
+        </div>
+      </div>
+    </section>
+
+    <section class="detail-desc panel soft">
+      <div class="panel-title">基础信息</div>
+      <div class="field-grid">
+        <div class="field">
+          <span>客户名称</span>
+          <strong>{{ lead.customerName ?? '—' }}</strong>
+        </div>
+        <div class="field">
+          <span>信用代码</span>
+          <strong>{{ lead.customerUsci ?? '—' }}</strong>
+        </div>
+        <div class="field">
+          <span>联系人</span>
+          <strong>{{ lead.contactName ?? '—' }}</strong>
+        </div>
+        <div class="field">
+          <span>联系电话</span>
+          <strong>{{ lead.contactPhone ?? '—' }}</strong>
+        </div>
+        <div class="field">
+          <span>线索来源</span>
+          <strong>{{ lead.leadSource ?? '—' }}</strong>
+        </div>
+        <div class="field">
+          <span>当前归属</span>
+          <strong>{{ lead.ownerSalesId == null ? '公海' : `销售 #${lead.ownerSalesId}` }}</strong>
+        </div>
+        <div class="field">
+          <span>最后跟踪</span>
+          <strong>{{ lead.lastTrackedAt ?? '尚未跟踪' }}</strong>
+        </div>
+        <div class="field">
+          <span>创建时间</span>
+          <strong>{{ lead.createdAt ?? '—' }}</strong>
+        </div>
+      </div>
+    </section>
 
     <a-alert v-if="lead.stage === '已流失'" type="warning" class="detail-lose">
       流失原因：{{ lead.loseReason ?? '—' }}<span v-if="lead.loseNote">；说明：{{ lead.loseNote }}</span>
     </a-alert>
 
     <!-- 写操作区：闭单只读时整体收起 -->
-    <div v-if="showStageWinLose || showRelease" class="detail-actions">
+    <div v-if="showStageWinLose || showRelease" class="detail-actions drawer-actions">
       <template v-if="showStageWinLose">
         <a-button
           v-for="s in targetStages"
@@ -263,7 +309,7 @@ onMounted(() => {
     </div>
 
     <!-- Admin 归属操作区（D3）：未结束线索；公海→分配，有归属→回收/转移 -->
-    <div v-if="showOwnership" class="ownership-actions">
+    <div v-if="showOwnership" class="ownership-actions panel">
       <span class="ownership-label">归属调度</span>
       <a-button v-if="isPool" class="assign-open" type="primary" size="small" @click="openAssign">
         分配给销售
@@ -275,8 +321,10 @@ onMounted(() => {
     </div>
 
     <!-- 进度跟踪流（倒序，由后端保证顺序） -->
-    <section class="detail-progress">
-      <h3 class="progress-title">进度跟踪</h3>
+    <section class="detail-progress panel">
+      <div class="panel-title">
+        <span>进度跟踪</span>
+      </div>
 
       <form v-if="showProgressAdd" class="progress-form" @submit.prevent="onAddProgress">
         <a-radio-group v-model="progress.method" class="progress-method">
@@ -293,16 +341,16 @@ onMounted(() => {
         </a-button>
       </form>
 
-      <a-timeline v-if="leads.progress.length" class="progress-list">
-        <a-timeline-item v-for="p in leads.progress" :key="p.id">
-          <div class="progress-item-head">
-            <span class="progress-item-method">{{ p.method }}</span>
-            <span class="progress-item-time">{{ p.trackTime }}</span>
-            <span class="progress-item-tracker">{{ p.trackerName ?? '—' }}</span>
+      <div v-if="leads.progress.length" class="progress-list">
+        <div v-for="(p, index) in leads.progress" :key="p.id" class="event">
+          <div class="event-dot">{{ index + 1 }}</div>
+          <div class="event-body">
+            <strong>{{ p.method }} · {{ p.trackerName ?? '—' }}</strong>
+            <p class="progress-item-content">{{ p.content }}</p>
+            <span>{{ p.trackTime }}</span>
           </div>
-          <div class="progress-item-content">{{ p.content }}</div>
-        </a-timeline-item>
-      </a-timeline>
+        </div>
+      </div>
       <p v-else class="progress-empty">暂无进度跟踪</p>
     </section>
 
@@ -426,23 +474,22 @@ onMounted(() => {
 .detail-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
 .detail-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  background: var(--dt-surface, #ffffff);
-  border: 1px solid var(--dt-line, #e6e8f0);
-  border-radius: var(--dt-radius, 12px);
-  padding: 20px 24px;
+  gap: 12px;
+  padding-bottom: 2px;
 }
 
 .detail-title {
-  margin: 0 0 4px;
+  margin: 0 0 8px;
   font-size: 20px;
-  font-weight: 700;
+  line-height: 1.25;
+  font-weight: 850;
   color: var(--dt-text, #202438);
 }
 
@@ -451,29 +498,106 @@ onMounted(() => {
   color: var(--dt-muted, #70778c);
 }
 
-.detail-desc,
-.detail-progress {
-  background: var(--dt-surface, #ffffff);
+.panel {
   border: 1px solid var(--dt-line, #e6e8f0);
   border-radius: var(--dt-radius, 12px);
-  padding: 16px;
+  padding: 14px;
+  margin: 0;
+  background: #fff;
+}
+
+.panel.soft {
+  background: #fbfcff;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 850;
+  color: var(--dt-text, #202438);
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.field {
+  min-height: 58px;
+  padding: 10px;
+  background: var(--dt-surface-soft, #f8f9fd);
+  border: 1px solid #edf0f6;
+  border-radius: 9px;
+}
+
+.field span {
+  display: block;
+  color: var(--dt-muted, #70778c);
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+
+.field strong {
+  display: block;
+  font-size: 13px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.stage-current {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 7px;
+  background: var(--dt-purple-soft, #f2ecff);
+  color: var(--dt-purple, #7c3aed);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.stage-rail {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.stage-step {
+  min-height: 34px;
+  padding: 4px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: #edf1f8;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 850;
+  text-align: center;
+}
+
+.stage-step.done {
+  background: var(--dt-green-soft, #e7f8f1);
+  color: var(--dt-green, #0f9f6e);
+}
+
+.stage-step.current {
+  background: var(--dt-purple-soft, #f2ecff);
+  color: var(--dt-purple, #7c3aed);
+  box-shadow: inset 0 0 0 1px #d9c8ff;
 }
 
 .detail-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
-  background: var(--dt-surface, #ffffff);
   border: 1px solid var(--dt-line, #e6e8f0);
   border-radius: var(--dt-radius, 12px);
-  padding: 16px;
-}
-
-.progress-title {
-  margin: 0 0 12px;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--dt-text, #202438);
+  padding: 14px;
+  background: #fff;
 }
 
 .progress-form {
@@ -487,16 +611,51 @@ onMounted(() => {
   align-self: flex-start;
 }
 
-.progress-item-head {
-  display: flex;
-  gap: 12px;
-  font-size: 13px;
-  color: var(--dt-muted, #70778c);
+.progress-list {
+  display: grid;
+  gap: 0;
 }
 
-.progress-item-content {
-  margin-top: 4px;
-  color: var(--dt-text, #202438);
+.event {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.event-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+  background: var(--dt-brand-soft, #eaf0ff);
+  color: var(--dt-brand, #2563ff);
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 12px;
+}
+
+.event-body {
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eef1f6;
+}
+
+.event-body strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.event-body p {
+  margin: 0 0 6px;
+  color: #4b5568;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.event-body span {
+  color: var(--dt-muted-2, #9aa1b4);
+  font-size: 12px;
 }
 
 .progress-empty {
@@ -524,10 +683,6 @@ onMounted(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  background: var(--dt-surface, #ffffff);
-  border: 1px solid var(--dt-line, #e6e8f0);
-  border-radius: var(--dt-radius, 12px);
-  padding: 16px;
 }
 
 .ownership-label {

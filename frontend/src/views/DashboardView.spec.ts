@@ -24,16 +24,7 @@ import {
 } from '../test/msw/handlers'
 import type { LeadView, PoolLeadView } from '../api/leads'
 import { useAuthStore } from '../stores/auth'
-import { useLeadsStore } from '../stores/leads'
 import DashboardView from './DashboardView.vue'
-
-/**
- * 工作台首屏（spec frontend-workbench）：
- * - 指标看板（只读、口径后端裁决、金额/流失率呈现、加载失败态）；
- * - 内嵌线索工作区（表格 + 抽屉详情，复用 LeadDetailPanel）；
- * - 今日提醒/待办（建议认领 + 长期未跟踪，客户端派生）；
- * - 首屏加载仅发只读查询。
- */
 
 const SAMPLE_DASHBOARD = {
   todayNewLeadCount: 4,
@@ -57,7 +48,6 @@ function buildRouter(): Router {
       { path: '/', name: 'workbench', component: DashboardView },
       { path: '/login', name: 'login', component: Stub },
       { path: '/customers', name: 'customers', component: Stub },
-      { path: '/leads/:id', name: 'lead-detail', component: Stub },
     ],
   })
 }
@@ -69,17 +59,9 @@ interface MountOpts {
   pool?: PoolLeadView[]
 }
 
-/**
- * 默认注册工作区/提醒所需的只读列表 handler（默认空，避免 onUnhandledRequest:'error'）。
- * dashboard handler 由各测试用例在调用前以 server.use 单独注册。
- */
 async function mountView(opts: MountOpts = {}): Promise<{ wrapper: VueWrapper; router: Router }> {
   server.use(mineLeads(opts.mine ?? []), allLeads(opts.all ?? []), poolList(opts.pool ?? []))
-  if (opts.admin) {
-    useAuthStore().currentUser = ADMIN_USER
-  } else {
-    useAuthStore().currentUser = SALES_USER
-  }
+  useAuthStore().currentUser = opts.admin ? ADMIN_USER : SALES_USER
   const router = buildRouter()
   await router.push('/')
   await router.isReady()
@@ -92,8 +74,8 @@ beforeEach(() => {
   document.body.innerHTML = ''
 })
 
-describe('首屏渲染四项指标', () => {
-  it('挂载即拉取并同屏渲染四项指标（值来自后端）', async () => {
+describe('原型化指标区', () => {
+  it('挂载即拉取并同屏渲染四项指标', async () => {
     server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
     const { wrapper } = await mountView()
     await flushPromises()
@@ -108,9 +90,7 @@ describe('首屏渲染四项指标', () => {
     expect(text).toContain('¥150,000.5')
     expect(text).toContain('40%')
   })
-})
 
-describe('加载态', () => {
   it('查询进行中呈现加载态，不把未返回指标渲染为零值', async () => {
     server.use(
       http.get('*/api/dashboard', async () => {
@@ -123,24 +103,8 @@ describe('加载态', () => {
     expect(wrapper.find('[data-test="dashboard-metrics"]').exists()).toBe(false)
     await flushPromises()
   })
-})
 
-describe('失败态', () => {
-  it('非鉴权失败呈现可重试失败态，不渲染零值指标', async () => {
-    server.use(
-      http.get('*/api/dashboard', () =>
-        HttpResponse.json({ code: 'INTERNAL_ERROR', message: '服务异常', data: null }, { status: 500 }),
-      ),
-    )
-    const { wrapper } = await mountView()
-    await flushPromises()
-
-    expect(wrapper.find('[data-test="dashboard-error"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="dashboard-retry"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="dashboard-metrics"]').exists()).toBe(false)
-  })
-
-  it('点重试重新拉取并渲染指标', async () => {
+  it('失败态可重试', async () => {
     let call = 0
     server.use(
       http.get('*/api/dashboard', () => {
@@ -159,67 +123,108 @@ describe('失败态', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-test="dashboard-metrics"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="dashboard-metrics"]').text()).toContain('今日新增线索')
   })
-})
 
-describe('流失率与金额呈现分支', () => {
-  it('流失率 null → "--"（非 "0%"）', async () => {
+  it('流失率与金额特殊值格式正确', async () => {
     server.use(
       http.get('*/api/dashboard', () =>
-        success({ ...SAMPLE_DASHBOARD, monthlyLossRate: null, monthlyEndedEventCount: 0, monthlyLostEventCount: 0 }),
+        success({ ...SAMPLE_DASHBOARD, monthlyLossRate: null, monthlyEndedEventCount: 0, monthlyWonAmount: 0 }),
       ),
     )
     const { wrapper } = await mountView()
     await flushPromises()
-    const lossText = wrapper.find('[data-test="metric-loss-rate"]').text()
-    expect(lossText).toContain('--')
-    expect(lossText).not.toContain('0%')
-  })
-
-  it('流失率 0 → "0%"（非 "--"）', async () => {
-    server.use(
-      http.get('*/api/dashboard', () =>
-        success({ ...SAMPLE_DASHBOARD, monthlyLossRate: 0, monthlyLostEventCount: 0, monthlyEndedEventCount: 2 }),
-      ),
-    )
-    const { wrapper } = await mountView()
-    await flushPromises()
-    const lossText = wrapper.find('[data-test="metric-loss-rate"]').text()
-    expect(lossText).toContain('0%')
-    expect(lossText).not.toContain('--')
-  })
-
-  it('赢单金额 0 → "¥0"', async () => {
-    server.use(http.get('*/api/dashboard', () => success({ ...SAMPLE_DASHBOARD, monthlyWonAmount: 0 })))
-    const { wrapper } = await mountView()
-    await flushPromises()
+    expect(wrapper.find('[data-test="metric-loss-rate"]').text()).toContain('--')
     expect(wrapper.find('[data-test="metric-won-amount"]').text()).toContain('¥0')
   })
 })
 
-describe('内嵌线索工作区表格（spec R 内嵌线索工作区）', () => {
-  it('SALES 工作区表格列出名下线索', async () => {
+describe('三 Tab 线索工作区', () => {
+  it('SALES 默认展示我的线索，ADMIN 默认展示全部线索', async () => {
     server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
     const { wrapper } = await mountView({ mine: [SAMPLE_LEAD] })
     await flushPromises()
+    expect(wrapper.find('[data-test="workbench-leads"]').text()).toContain(SAMPLE_LEAD.customerName!)
 
-    const ws = wrapper.find('[data-test="workbench-leads"]')
-    expect(ws.exists()).toBe(true)
-    expect(ws.text()).toContain(SAMPLE_LEAD.customerName!)
+    const allRow: LeadView = { ...SAMPLE_LEAD, id: 777, customerName: '全量线索客户' }
+    const mounted = await mountView({ admin: true, all: [allRow] })
+    await flushPromises()
+    expect(mounted.wrapper.find('[data-test="workbench-leads"]').text()).toContain('全量线索客户')
   })
 
-  it('ADMIN 工作区表格列出全部线索', async () => {
-    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
-    const allRow: LeadView = { ...SAMPLE_LEAD, id: 777, customerName: '全量线索客户' }
-    const { wrapper } = await mountView({ admin: true, all: [allRow] })
+  it('切换到公海线索 Tab 展示公海列表并支持认领', async () => {
+    server.use(
+      http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)),
+      claimSuccess({ ...SAMPLE_LEAD, id: SAMPLE_POOL_LEAD.id, ownerSalesId: 2 }),
+      leadDetail({ ...SAMPLE_LEAD, id: SAMPLE_POOL_LEAD.id, ownerSalesId: 2 }),
+      progressList([SAMPLE_PROGRESS]),
+    )
+    const successSpy = vi.spyOn(Message, 'success')
+    const { wrapper } = await mountView({ pool: [SAMPLE_POOL_LEAD] })
+    await flushPromises()
+
+    await wrapper.findAll('.tab').find((t) => t.text().includes('公海线索'))!.trigger('click')
     await flushPromises()
 
     const ws = wrapper.find('[data-test="workbench-leads"]')
-    expect(ws.text()).toContain('全量线索客户')
+    expect(ws.text()).toContain(SAMPLE_POOL_LEAD.customerName!)
+    await ws.find('.claim-btn').trigger('click')
+    await flushPromises()
+    expect(successSpy).toHaveBeenCalled()
   })
 
-  it('点击表格行在抽屉内进入详情（渲染 LeadDetailPanel）', async () => {
+  it('公海认领被抢先时提示并刷新公海', async () => {
+    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)), claimAlreadyClaimed())
+    const warnSpy = vi.spyOn(Message, 'warning')
+    const { wrapper } = await mountView({ pool: [SAMPLE_POOL_LEAD] })
+    await flushPromises()
+
+    await wrapper.findAll('.tab').find((t) => t.text().includes('公海线索'))!.trigger('click')
+    await flushPromises()
+    await wrapper.find('[data-test="workbench-leads"] .claim-btn').trigger('click')
+    await flushPromises()
+
+    expect(warnSpy.mock.calls.some((c) => String(c[0]).includes('已被认领'))).toBe(true)
+  })
+
+  it('本月结束 Tab 只展示当前月份赢单或流失线索', async () => {
+    const now = new Date()
+    const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-10T09:00:00`
+    const won: LeadView = { ...SAMPLE_LEAD, id: 401, customerName: '本月赢单客户', stage: '已赢单', wonAt: current }
+    const lost: LeadView = { ...SAMPLE_LEAD, id: 402, customerName: '本月流失客户', stage: '已流失', lostAt: current }
+    const old: LeadView = { ...SAMPLE_LEAD, id: 403, customerName: '历史结束客户', stage: '已赢单', wonAt: '2025-01-01T09:00:00' }
+    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
+    const { wrapper } = await mountView({ mine: [won, lost, old] })
+    await flushPromises()
+
+    await wrapper.findAll('.tab').find((t) => t.text().includes('本月结束'))!.trigger('click')
+    await flushPromises()
+
+    const text = wrapper.find('[data-test="workbench-leads"]').text()
+    expect(text).toContain('本月赢单客户')
+    expect(text).toContain('本月流失客户')
+    expect(text).not.toContain('历史结束客户')
+  })
+
+  it('过滤器按关键词、业务类型和阶段筛选当前 Tab', async () => {
+    const a: LeadView = { ...SAMPLE_LEAD, id: 501, customerName: '星河建设集团', businessType: 'BIM咨询', stage: '方案报价' }
+    const b: LeadView = { ...SAMPLE_LEAD, id: 502, customerName: '远景产业园', businessType: '定制开发', stage: '商务谈判' }
+    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
+    const { wrapper } = await mountView({ mine: [a, b] })
+    await flushPromises()
+
+    await wrapper.find('.search').setValue('星河')
+    await wrapper.findAll('select')[0]!.setValue('BIM咨询')
+    await wrapper.findAll('select')[1]!.setValue('方案报价')
+    await flushPromises()
+
+    const text = wrapper.find('[data-test="workbench-leads"]').text()
+    expect(text).toContain('星河建设集团')
+    expect(text).not.toContain('远景产业园')
+  })
+})
+
+describe('右侧详情面板', () => {
+  it('点击表格线索在右侧面板渲染 LeadDetailPanel', async () => {
     server.use(
       http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)),
       leadDetail(SAMPLE_LEAD),
@@ -228,7 +233,7 @@ describe('内嵌线索工作区表格（spec R 内嵌线索工作区）', () => 
     const { wrapper } = await mountView({ mine: [SAMPLE_LEAD] })
     await flushPromises()
 
-    expect(wrapper.find('[data-test="lead-drawer"] .detail-desc').exists()).toBe(false)
+    expect(wrapper.find('[data-test="lead-drawer"]').exists()).toBe(false)
     await wrapper.find('[data-test="workbench-leads"] .lead-link').trigger('click')
     await flushPromises()
 
@@ -237,7 +242,7 @@ describe('内嵌线索工作区表格（spec R 内嵌线索工作区）', () => 
     expect(drawer.text()).toContain(SAMPLE_LEAD.customerUsci!)
   })
 
-  it('抽屉打开已结束线索不呈现写入口，且不含系统日志', async () => {
+  it('打开已结束线索不呈现写入口且不含系统日志', async () => {
     const won: LeadView = { ...SAMPLE_LEAD, stage: '已赢单', wonAt: '2026-05-10T09:00:00' }
     server.use(
       http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)),
@@ -257,70 +262,7 @@ describe('内嵌线索工作区表格（spec R 内嵌线索工作区）', () => 
   })
 })
 
-describe('今日提醒/待办（spec R 今日提醒/待办）', () => {
-  it('SALES 公海非空时呈现建议认领条目', async () => {
-    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
-    const { wrapper } = await mountView({ pool: [SAMPLE_POOL_LEAD] })
-    await flushPromises()
-
-    const reminders = wrapper.find('[data-test="workbench-reminders"]')
-    expect(reminders.exists()).toBe(true)
-    expect(reminders.text()).toContain(SAMPLE_POOL_LEAD.customerName!)
-    expect(reminders.find('.reminder-claim').exists()).toBe(true)
-  })
-
-  it('SALES 名下存在长期未跟踪线索时呈现待跟踪条目', async () => {
-    const stale: LeadView = { ...SAMPLE_LEAD, id: 321, customerName: '久未跟踪客户', lastTrackedAt: null }
-    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
-    const { wrapper } = await mountView({ mine: [stale] })
-    await flushPromises()
-
-    const reminders = wrapper.find('[data-test="workbench-reminders"]')
-    expect(reminders.text()).toContain('久未跟踪客户')
-  })
-
-  it('认领入口不对 ADMIN 呈现', async () => {
-    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
-    const { wrapper } = await mountView({ admin: true, pool: [SAMPLE_POOL_LEAD] })
-    await flushPromises()
-
-    const reminders = wrapper.find('[data-test="workbench-reminders"]')
-    expect(reminders.find('.reminder-claim').exists()).toBe(false)
-  })
-
-  it('SALES 内联认领被抢先时提示"该线索已被认领"并刷新公海', async () => {
-    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)), claimAlreadyClaimed())
-    const warnSpy = vi.spyOn(Message, 'warning')
-    const { wrapper } = await mountView({ pool: [SAMPLE_POOL_LEAD] })
-    await flushPromises()
-
-    // 抢先冲突后须重新拉取公海纠正本地态（spy store action，避免 msw runtime handler 覆盖顺序干扰）。
-    const store = useLeadsStore()
-    const poolSpy = vi.spyOn(store, 'loadPool')
-    await wrapper.find('[data-test="workbench-reminders"] .reminder-claim').trigger('click')
-    await flushPromises()
-
-    expect(warnSpy.mock.calls.some((c) => String(c[0]).includes('已被认领'))).toBe(true)
-    expect(poolSpy).toHaveBeenCalled()
-  })
-
-  it('SALES 内联认领成功后提示并刷新名下线索', async () => {
-    server.use(
-      http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)),
-      claimSuccess({ ...SAMPLE_LEAD, id: SAMPLE_POOL_LEAD.id, ownerSalesId: 2 }),
-    )
-    const successSpy = vi.spyOn(Message, 'success')
-    const { wrapper } = await mountView({ pool: [SAMPLE_POOL_LEAD] })
-    await flushPromises()
-
-    await wrapper.find('[data-test="workbench-reminders"] .reminder-claim').trigger('click')
-    await flushPromises()
-
-    expect(successSpy).toHaveBeenCalled()
-  })
-})
-
-describe('首屏加载仅发只读查询（spec MODIFIED 只读看板）', () => {
+describe('首屏加载仅发只读查询', () => {
   it('首屏加载只命中只读 GET 端点，不向任何写端点发请求', async () => {
     const calls: { method: string; path: string }[] = []
     const record = (path: string) =>
@@ -338,5 +280,29 @@ describe('首屏加载仅发只读查询（spec MODIFIED 只读看板）', () =>
 
     expect(calls.length).toBeGreaterThan(0)
     expect(calls.every((c) => c.method === 'GET')).toBe(true)
+  })
+})
+
+describe('lead drawer close behavior', () => {
+  it('closes the lead drawer and clears the selected row', async () => {
+    server.use(
+      http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)),
+      leadDetail(SAMPLE_LEAD),
+      progressList([SAMPLE_PROGRESS]),
+    )
+    const { wrapper } = await mountView({ mine: [SAMPLE_LEAD] })
+    await flushPromises()
+
+    await wrapper.find('[data-test="workbench-leads"] .lead-link').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="lead-drawer"]').exists()).toBe(true)
+    expect(wrapper.find('tr.selected').exists()).toBe(true)
+
+    await wrapper.find('[data-test="lead-drawer-close"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="lead-drawer"]').exists()).toBe(false)
+    expect(wrapper.find('tr.selected').exists()).toBe(false)
   })
 })

@@ -101,7 +101,10 @@ onMounted(() => {
 <template>
   <section class="users-page">
     <header class="users-head">
-      <h2 class="users-title">用户管理</h2>
+      <div>
+        <h2 class="users-title">用户管理</h2>
+        <p class="users-sub">创建销售账号，维护启用与停用状态。</p>
+      </div>
       <a-button class="create-sales-open" type="primary" @click="openCreate">新建 Sales</a-button>
     </header>
 
@@ -114,7 +117,9 @@ onMounted(() => {
       class="users-table"
     >
       <template #role="{ record }">
-        <span class="account-role">{{ roleLabel[record.role] ?? record.role }}</span>
+        <span class="tag" :class="record.role === 'ADMIN' ? 'purple' : 'blue'">
+          {{ roleLabel[record.role] ?? record.role }}
+        </span>
       </template>
       <template #status="{ record }">
         <a-tag
@@ -179,22 +184,61 @@ onMounted(() => {
 
 .users-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 16px;
   margin-bottom: 16px;
 }
 
 .users-title {
   margin: 0;
   font-size: 20px;
-  font-weight: 700;
+  font-weight: 850;
   color: var(--dt-text, #202438);
+}
+
+.users-sub {
+  margin: 6px 0 0;
+  color: var(--dt-muted, #70778c);
+  font-size: 13px;
 }
 
 .users-empty {
   padding: 24px;
   text-align: center;
   color: var(--dt-muted, #70778c);
+}
+
+.users-table :deep(.arco-table-th) {
+  background: #fbfcff;
+  color: var(--dt-muted, #70778c);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.users-table :deep(.arco-table-td) {
+  font-size: 13px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 7px;
+  font-weight: 800;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.tag.blue {
+  background: var(--dt-brand-soft, #eaf0ff);
+  color: #1d4ed8;
+}
+
+.tag.purple {
+  background: var(--dt-purple-soft, #f2ecff);
+  color: var(--dt-purple, #7c3aed);
 }
 
 .users-modal-footer {
