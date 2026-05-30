@@ -16,17 +16,24 @@ const ADMIN: AuthUser = { id: 1, email: 'a@d.local', name: '管理员', role: 'A
 const SALES: AuthUser = { id: 2, email: 's@d.local', name: '林雨', role: 'SALES', status: 'ENABLED' }
 
 function buildRouter(): Router {
+  // 镜像真实嵌套结构（父 `/` + 子 `path: ''` 工作台），否则无法复现导航高亮匹配行为。
   return createRouter({
     history: createMemoryHistory(),
     routes: [
       { path: '/login', name: 'login', component: Stub },
-      { path: '/', name: 'workbench', component: Stub },
-      { path: '/my-leads', name: 'my-leads', component: Stub },
-      { path: '/public-pool', name: 'public-pool', component: Stub },
-      { path: '/customers', name: 'customers', component: Stub },
-      { path: '/contracts', name: 'contracts', component: Stub },
-      { path: '/users', name: 'users', component: Stub },
-      { path: '/system-logs', name: 'system-logs', component: Stub },
+      {
+        path: '/',
+        component: Stub,
+        children: [
+          { path: '', name: 'workbench', component: Stub },
+          { path: 'my-leads', name: 'my-leads', component: Stub },
+          { path: 'public-pool', name: 'public-pool', component: Stub },
+          { path: 'customers', name: 'customers', component: Stub },
+          { path: 'contracts', name: 'contracts', component: Stub },
+          { path: 'users', name: 'users', component: Stub },
+          { path: 'system-logs', name: 'system-logs', component: Stub },
+        ],
+      },
     ],
   })
 }
@@ -105,5 +112,25 @@ describe('refine shell iteration', () => {
     await wrapper.find('[data-test="reminder-create-lead"]').trigger('click')
 
     expect(wrapper.emitted('open-create-lead')).toBeTruthy()
+  })
+})
+
+describe('refine nav active state', () => {
+  function navItem(wrapper: VueWrapper, label: string) {
+    return wrapper.findAll('.shell-nav-item').find((i) => i.text().includes(label))!
+  }
+
+  it('停留在销售工作台时该入口高亮', async () => {
+    const { wrapper } = await mountShell(ADMIN)
+    expect(navItem(wrapper, '销售工作台').classes()).toContain('is-active')
+  })
+
+  it('切换到其他菜单时销售工作台不再高亮，仅当前菜单高亮', async () => {
+    const { wrapper, router } = await mountShell(ADMIN)
+    await router.push('/my-leads')
+    await flushPromises()
+
+    expect(navItem(wrapper, '销售工作台').classes()).not.toContain('is-active')
+    expect(navItem(wrapper, '我的线索').classes()).toContain('is-active')
   })
 })
