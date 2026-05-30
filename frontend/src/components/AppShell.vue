@@ -49,7 +49,7 @@ async function onLogout() {
             :key="entry.routeName"
             :to="{ name: entry.routeName }"
             class="shell-nav-item"
-            active-class="is-active"
+            exact-active-class="is-active"
           >
             <span class="shell-nav-dot" aria-hidden="true"></span>
             <span>{{ entry.label }}</span>
