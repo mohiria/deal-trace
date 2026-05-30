@@ -38,6 +38,8 @@ $RECYCLE.BIN/
 \#*\#
 .\#*
 
+PPT/
+
 # Cursor / Windsurf 等基于 VS Code 的编辑器
 .cursor/
 .windsurf/
@@ -48,7 +50,7 @@ $RECYCLE.BIN/
 # omc skills 本地缓存（与项目无关的本地开发产物）
 .omc/
 
-# Claude Code 私有产物（项目级 .codex/ 整体忽略）
+# codex 私有产物（项目级 .codex/ 整体忽略）
 .codex/
 .codex-run/
 
