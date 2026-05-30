@@ -1,0 +1,28 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    image: dealtrace-backend:local
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DEALTRACE_JWT_SECRET: ${DEALTRACE_JWT_SECRET}
+      DEALTRACE_ADMIN_EMAIL: ${DEALTRACE_ADMIN_EMAIL}
+      DEALTRACE_ADMIN_PASSWORD: ${DEALTRACE_ADMIN_PASSWORD}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    image: dealtrace-frontend:local
+    environment:
+      API_UPSTREAM: http://backend:8080
+    ports:
+      - "${FRONTEND_PORT:-8081}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
