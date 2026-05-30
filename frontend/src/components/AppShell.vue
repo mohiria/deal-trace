@@ -1,15 +1,28 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useLeadsStore } from '../stores/leads'
 import { visibleSections } from './navigation'
+import CreateLeadModal from './CreateLeadModal.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
+const leads = useLeadsStore()
+const emit = defineEmits<{ 'open-create-lead': [] }>()
 
 const sections = computed(() => visibleSections(auth.role))
 const displayName = computed(() => auth.currentUser?.name ?? '')
-const roleLabel = computed(() => (auth.isAdmin ? '管理员' : '销售'))
+const createLeadVisible = ref(false)
+
+function openCreateLead() {
+  createLeadVisible.value = true
+  emit('open-create-lead')
+}
+
+async function refreshLeadListsAfterCreate() {
+  await Promise.allSettled([leads.loadMyLeads(), leads.loadPool(), auth.isAdmin ? leads.loadAllLeads() : Promise.resolve()])
+}
 
 async function onLogout() {
   auth.logout()
@@ -47,7 +60,9 @@ async function onLogout() {
       <section class="shell-reminder" aria-label="今日提醒">
         <h3>今日提醒</h3>
         <p>优先处理高价值公海线索和长期未跟进客户。</p>
-        <RouterLink class="shell-reminder-action" :to="{ name: 'customers' }">新建线索</RouterLink>
+        <button class="shell-reminder-action" data-test="reminder-create-lead" type="button" @click="openCreateLead">
+          新增线索
+        </button>
       </section>
     </aside>
 
@@ -55,7 +70,6 @@ async function onLogout() {
       <header class="shell-topbar">
         <div class="shell-user">
           <span class="shell-user-name">{{ displayName }}</span>
-          <span class="shell-user-role">{{ roleLabel }}</span>
         </div>
         <a-button class="shell-logout" @click="onLogout">退出登录</a-button>
       </header>
@@ -64,6 +78,7 @@ async function onLogout() {
         <RouterView />
       </section>
     </main>
+    <CreateLeadModal v-model:visible="createLeadVisible" @created="refreshLeadListsAfterCreate" />
   </div>
 </template>
 
@@ -201,13 +216,14 @@ async function onLogout() {
   padding: 0 12px;
   display: inline-flex;
   align-items: center;
+  border: 0;
   border-radius: 8px;
   background: var(--dt-brand, #2563ff);
   color: #fff;
-  text-decoration: none;
   font-weight: 800;
   font-size: 13px;
   box-shadow: 0 8px 18px rgba(37, 99, 255, 0.22);
+  cursor: pointer;
 }
 
 .shell-main {
@@ -236,11 +252,6 @@ async function onLogout() {
 .shell-user-name {
   font-weight: 600;
   color: var(--dt-text, #202438);
-}
-
-.shell-user-role {
-  font-size: 12px;
-  color: var(--dt-muted, #70778c);
 }
 
 .shell-content {

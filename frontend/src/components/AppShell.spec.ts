@@ -91,3 +91,19 @@ describe('AppShell 登出', () => {
     expect(router.currentRoute.value.name).toBe('login')
   })
 })
+
+describe('refine shell iteration', () => {
+  it('右上角只显示姓名不显示角色', async () => {
+    const { wrapper } = await mountShell(SALES)
+    expect(wrapper.find('.shell-user-name').text()).toContain(SALES.name)
+    expect(wrapper.find('.shell-user-role').exists()).toBe(false)
+    expect(wrapper.find('.shell-topbar').text()).not.toContain('销售')
+  })
+
+  it('今日提醒新增线索触发统一入口事件', async () => {
+    const { wrapper } = await mountShell(SALES)
+    await wrapper.find('[data-test="reminder-create-lead"]').trigger('click')
+
+    expect(wrapper.emitted('open-create-lead')).toBeTruthy()
+  })
+})

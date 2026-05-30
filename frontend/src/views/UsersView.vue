@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import type { TableColumnData } from '@arco-design/web-vue'
 import { useAuthStore } from '../stores/auth'
@@ -13,6 +13,9 @@ import type { AccountView } from '../api/accounts'
  */
 const auth = useAuthStore()
 const accounts = useAccountsStore()
+const keyword = ref('')
+const currentPage = ref(1)
+const pageSize = 10
 
 const columns: TableColumnData[] = [
   { title: '邮箱', dataIndex: 'email' },
@@ -92,6 +95,25 @@ async function onToggle(record: AccountView) {
 }
 
 const rows = computed(() => accounts.accounts)
+const filteredRows = computed(() => {
+  const search = keyword.value.trim().toLowerCase()
+  if (!search) return rows.value
+  return rows.value.filter((account) =>
+    [account.email, account.name, roleLabel[account.role] ?? account.role, account.status === 'ENABLED' ? '启用' : '停用']
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(search),
+  )
+})
+const pagedRows = computed(() => {
+  const start = (currentPage.value - 1) * pageSize
+  return filteredRows.value.slice(start, start + pageSize)
+})
+
+watch(keyword, () => {
+  currentPage.value = 1
+})
 
 onMounted(() => {
   void accounts.loadAccounts()
@@ -108,8 +130,12 @@ onMounted(() => {
       <a-button class="create-sales-open" type="primary" @click="openCreate">新建 Sales</a-button>
     </header>
 
+    <div class="users-toolbar">
+      <input v-model="keyword" class="list-search" type="search" placeholder="搜索邮箱 / 姓名 / 角色 / 状态" />
+    </div>
+
     <a-table
-      :data="rows"
+      :data="pagedRows"
       :columns="columns"
       :pagination="false"
       :loading="accounts.loading"
@@ -146,6 +172,9 @@ onMounted(() => {
         <div class="users-empty">暂无账号</div>
       </template>
     </a-table>
+    <div v-if="filteredRows.length > pageSize" class="pagination-bar" data-test="list-pagination">
+      <a-pagination v-model:current="currentPage" :total="filteredRows.length" :page-size="pageSize" show-total />
+    </div>
 
     <!-- 创建 Sales -->
     <a-modal
@@ -203,6 +232,27 @@ onMounted(() => {
   font-size: 13px;
 }
 
+.users-toolbar {
+  display: flex;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--dt-line, #e6e8f0);
+  border-bottom: 0;
+  border-radius: var(--dt-radius, 12px) var(--dt-radius, 12px) 0 0;
+  background: #fbfcff;
+}
+
+.list-search {
+  width: min(440px, 100%);
+  box-sizing: border-box;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--dt-line, #e6e8f0);
+  border-radius: var(--dt-radius-sm, 8px);
+  font-size: 13px;
+  color: var(--dt-text, #202438);
+}
+
 .users-empty {
   padding: 24px;
   text-align: center;
@@ -246,5 +296,11 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 12px;
+}
+
+.pagination-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 0 0;
 }
 </style>

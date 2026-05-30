@@ -97,6 +97,21 @@ describe('客户列表与搜索（spec R1）', () => {
 
     expect(wrapper.find('.customers-empty').exists()).toBe(true)
   })
+
+  it('不展示无意义的 Table/Modal 标签并支持分页', async () => {
+    const rows = Array.from({ length: 12 }, (_, index) => ({
+      ...SAMPLE_CUSTOMER,
+      id: 1000 + index,
+      name: index === 11 ? '星河客户集团' : `分页客户${index + 1}`,
+    }))
+    server.use(customerList(rows))
+    const wrapper = await mountView()
+
+    expect(wrapper.find('.customers-toolbar').text()).not.toContain('Table')
+    expect(wrapper.find('.customers-toolbar').text()).not.toContain('Modal')
+    expect(wrapper.find('[data-test="list-pagination"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('星河客户集团')
+  })
 })
 
 describe('创建客户（spec R2）', () => {

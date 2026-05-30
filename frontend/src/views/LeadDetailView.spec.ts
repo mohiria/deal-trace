@@ -439,3 +439,18 @@ describe('Admin 归属操作区（spec：分配/回收/转移）', () => {
     expect(reloadSpy).toHaveBeenCalledWith(100)
   })
 })
+
+describe('refine drawer stage display', () => {
+  it('阶段轨道仅显示历史阶段到当前阶段且标题右侧不显示阶段标签', async () => {
+    const quoted: LeadView = { ...SAMPLE_LEAD, stage: '方案报价' }
+    const wrapper = await mountView({ lead: quoted })
+
+    const railText = wrapper.find('.stage-rail').text()
+    expect(wrapper.find('.stage-current').text()).toContain('方案报价')
+    expect(railText).toContain('未触达')
+    expect(railText).toContain('初步沟通')
+    expect(railText).toContain('方案报价')
+    expect(railText).not.toContain('商务谈判')
+    expect(wrapper.find('.detail-head .detail-stage').exists()).toBe(false)
+  })
+})

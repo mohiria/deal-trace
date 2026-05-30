@@ -55,6 +55,24 @@ describe('账号列表（spec：查看账号列表）', () => {
     const text = wrapper.text()
     expect(text.indexOf(SALES_ON.email)).toBeLessThan(text.indexOf(SALES_OFF.email))
   })
+
+  it('支持账号搜索和标准分页', async () => {
+    const rows = Array.from({ length: 12 }, (_, index) => ({
+      ...SALES_ON,
+      id: 20 + index,
+      email: index === 11 ? 'xinghe@dealtrace.local' : `sales${index + 1}@dealtrace.local`,
+      name: index === 11 ? '星河销售' : `销售${index + 1}`,
+    }))
+    const wrapper = await mountView([ADMIN, ...rows])
+
+    expect(wrapper.find('[data-test="list-pagination"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('xinghe@dealtrace.local')
+
+    await wrapper.find('.list-search').setValue('星河')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('xinghe@dealtrace.local')
+  })
 })
 
 describe('创建 Sales（spec：创建 Sales 账号）', () => {
