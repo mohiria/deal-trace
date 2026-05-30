@@ -32,7 +32,7 @@ test('登录 → 工作台 → 登出 → 受保护区被拦截回登录', async
 
   // 进入工作台：URL 离开 /login，且工作台外壳导航出现
   await expect(page).not.toHaveURL(/\/login$/)
-  await expect(page.getByText('销售工作台')).toBeVisible()
+  await expect(page.getByRole('link', { name: '销售工作台' })).toBeVisible()
 
   // 登出 → 回到登录页
   await page.getByRole('button', { name: '退出登录' }).click()
