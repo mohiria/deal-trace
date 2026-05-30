@@ -259,6 +259,7 @@ describe('闭单只读（R7）', () => {
     expect(wrapper.find('.win-open').exists()).toBe(false)
     expect(wrapper.find('.lose-open').exists()).toBe(false)
     expect(wrapper.find('.release-open').exists()).toBe(false)
+    expect(wrapper.html()).not.toContain('系统日志')
   })
 
   it('写操作遇 LEAD_ENDED_READONLY 提示并刷新只读态', async () => {

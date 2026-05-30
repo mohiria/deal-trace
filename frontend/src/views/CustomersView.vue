@@ -195,21 +195,28 @@ onMounted(() => {
 <template>
   <section class="customers-page">
     <header class="customers-head">
-      <h2 class="customers-title">客户管理</h2>
+      <div>
+        <h2 class="customers-title">客户管理</h2>
+        <p class="customers-sub">维护客户主体，并在客户上下文中创建业务线索。</p>
+      </div>
       <div class="customers-actions">
         <a-button class="create-customer-open" type="primary" @click="openCustomerModal">新建客户</a-button>
         <a-button class="create-lead-open" @click="openLeadModal">新建线索</a-button>
       </div>
     </header>
 
-    <input
-      v-model="keyword"
-      class="customer-search"
-      type="text"
-      placeholder="按客户名称或统一社会信用代码搜索"
-      autocomplete="off"
-      @input="onSearchInput"
-    />
+    <div class="customers-toolbar">
+      <input
+        v-model="keyword"
+        class="customer-search"
+        type="text"
+        placeholder="按客户名称或统一社会信用代码搜索"
+        autocomplete="off"
+        @input="onSearchInput"
+      />
+      <span class="tag blue">Table</span>
+      <span class="tag orange">Modal</span>
+    </div>
 
     <a-table
       :data="customers"
@@ -325,31 +332,53 @@ onMounted(() => {
 
 .customers-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 16px;
+  gap: 16px;
+  margin-bottom: 14px;
 }
 
 .customers-title {
   margin: 0;
   font-size: 20px;
-  font-weight: 700;
+  font-weight: 850;
   color: var(--dt-text, #202438);
+}
+
+.customers-sub {
+  margin: 6px 0 0;
+  color: var(--dt-muted, #70778c);
+  font-size: 13px;
 }
 
 .customers-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.customers-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 14px;
+  margin-bottom: 0;
+  border: 1px solid var(--dt-line, #e6e8f0);
+  border-bottom: 0;
+  border-radius: var(--dt-radius, 12px) var(--dt-radius, 12px) 0 0;
+  background: #fbfcff;
 }
 
 .customer-search {
-  width: 100%;
+  width: min(420px, 100%);
   box-sizing: border-box;
-  margin-bottom: 16px;
-  padding: 8px 12px;
+  height: 34px;
+  padding: 0 12px;
   border: 1px solid var(--dt-line, #e6e8f0);
-  border-radius: var(--dt-radius-sm, 6px);
-  font-size: 14px;
+  border-radius: var(--dt-radius-sm, 8px);
+  font-size: 13px;
   color: var(--dt-text, #202438);
 }
 
@@ -362,6 +391,38 @@ onMounted(() => {
   padding: 24px;
   text-align: center;
   color: var(--dt-muted, #70778c);
+}
+
+.customers-table :deep(.arco-table-th) {
+  background: #fbfcff;
+  color: var(--dt-muted, #70778c);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.customers-table :deep(.arco-table-td) {
+  font-size: 13px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 7px;
+  font-weight: 800;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.tag.blue {
+  background: var(--dt-brand-soft, #eaf0ff);
+  color: #1d4ed8;
+}
+
+.tag.orange {
+  background: var(--dt-orange-soft, #fff4df);
+  color: var(--dt-orange, #d97706);
 }
 
 .lead-block {
