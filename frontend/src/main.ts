@@ -14,7 +14,6 @@ const app = createApp(App)
 const pinia = createPinia()
 
 app.use(pinia)
-app.use(router)
 app.use(ArcoVue)
 
 const auth = useAuthStore(pinia)
@@ -27,5 +26,6 @@ setUnauthorizedHandler(() => {
 
 // 先凭持久化令牌恢复登录态（向 /auth/me 核实）再挂载，避免首屏在已登录时闪登录页。
 void auth.restore().finally(() => {
+  app.use(router)
   app.mount('#app')
 })
