@@ -53,6 +53,11 @@ describe('visibleSections（纯函数）', () => {
     expect(labels).toContain('我的线索')
   })
 
+  it('系统日志入口对 ADMIN 不呈现（查看能力尚未交付，frontend-admin 隐藏）', () => {
+    const labels = visibleSections('ADMIN').flatMap((s) => s.entries.map((e) => e.label))
+    expect(labels).not.toContain('系统日志')
+  })
+
   it('SALES 不含 Admin 专属入口', () => {
     const labels = visibleSections('SALES').flatMap((s) => s.entries.map((e) => e.label))
     expect(labels).not.toContain('用户管理')

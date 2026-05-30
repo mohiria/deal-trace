@@ -275,5 +275,92 @@ export function createLeadValidation(message = '联系电话格式非法') {
   )
 }
 
+// ---- frontend-admin：/admin/accounts/* 与 /leads/{id}/{assign,recall,transfer} handler 工厂 ----
+
+import type { AccountView } from '../../api/accounts'
+
+/** 一条样例启用 Sales 账号（镜像后端 AccountView，6 字段，无密码哈希）。 */
+export const SAMPLE_ACCOUNT: AccountView = {
+  id: 2,
+  email: 'sales@dealtrace.local',
+  name: '林雨',
+  role: 'SALES',
+  status: 'ENABLED',
+  createdAt: '2026-05-01T09:00:00',
+}
+
+/** 账号列表（默认含一个 Admin + 一个 Sales）。 */
+export function accountsList(rows: AccountView[] = [
+  { id: 1, email: 'admin@dealtrace.local', name: '系统管理员', role: 'ADMIN', status: 'ENABLED', createdAt: '2026-04-01T09:00:00' },
+  SAMPLE_ACCOUNT,
+]) {
+  return http.get('*/api/admin/accounts', () => HttpResponse.json(success(rows)))
+}
+
+export function createSalesSuccess(account: AccountView = { ...SAMPLE_ACCOUNT, id: 99, email: 'new@dealtrace.local', name: '新销售' }) {
+  return http.post('*/api/admin/accounts', () => HttpResponse.json(success(account)))
+}
+
+export function createSalesDuplicate(message = '邮箱已存在') {
+  return http.post('*/api/admin/accounts', () =>
+    HttpResponse.json(failure('VALIDATION_ERROR', message), { status: 400 }),
+  )
+}
+
+/** 状态切换成功：返回切换后的账号（调用方传期望的 status）。 */
+export function statusToggleSuccess(account: AccountView) {
+  return http.patch('*/api/admin/accounts/:id/status', () => HttpResponse.json(success(account)))
+}
+
+export function disableSelfRejected(message = '不可停用自己') {
+  return http.patch('*/api/admin/accounts/:id/status', () =>
+    HttpResponse.json(failure('VALIDATION_ERROR', message), { status: 400 }),
+  )
+}
+
+export function assignSuccess(lead: LeadView = { ...SAMPLE_LEAD, ownerSalesId: 2 }) {
+  return http.post('*/api/leads/:id/assign', () => HttpResponse.json(success(lead)))
+}
+
+export function assignAlreadyOwned(message = '线索已有归属，请使用转移') {
+  return http.post('*/api/leads/:id/assign', () =>
+    HttpResponse.json(failure('VALIDATION_ERROR', message), { status: 400 }),
+  )
+}
+
+export function recallSuccess(lead: LeadView = { ...SAMPLE_LEAD, ownerSalesId: null }) {
+  return http.post('*/api/leads/:id/recall', () => HttpResponse.json(success(lead)))
+}
+
+export function recallAlreadyPool(message = '线索已在公海，无需回收') {
+  return http.post('*/api/leads/:id/recall', () =>
+    HttpResponse.json(failure('VALIDATION_ERROR', message), { status: 400 }),
+  )
+}
+
+export function transferSuccess(lead: LeadView = { ...SAMPLE_LEAD, ownerSalesId: 3 }) {
+  return http.post('*/api/leads/:id/transfer', () => HttpResponse.json(success(lead)))
+}
+
+export function transferSameOwner(message = '目标销售与当前归属相同') {
+  return http.post('*/api/leads/:id/transfer', () =>
+    HttpResponse.json(failure('VALIDATION_ERROR', message), { status: 400 }),
+  )
+}
+
+/** 归属操作被后端以 LEAD_ENDED_READONLY 拒绝（已结束线索）。path ∈ assign|recall|transfer。 */
+export function ownershipEndedReadonly(path: string, message = '线索已结束，不可变更归属') {
+  return http.post(`*/api/leads/:id/${path}`, () =>
+    HttpResponse.json(failure('LEAD_ENDED_READONLY', message), { status: 409 }),
+  )
+}
+
+/** 归属操作被后端以 FORBIDDEN 拒绝（越权）。path ∈ assign|recall|transfer。 */
+export function ownershipForbidden(path: string, message = '无权执行该操作') {
+  return http.post(`*/api/leads/:id/${path}`, () =>
+    HttpResponse.json(failure('FORBIDDEN', message), { status: 403 }),
+  )
+}
+
 /** 默认 handler 集：登录成功 + me 成功（Admin）。 */
 export const handlers = [loginSuccess(), meSuccess()]

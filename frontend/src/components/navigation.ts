@@ -31,7 +31,8 @@ export const navSections: NavSection[] = [
     entries: [
       { label: '合同记录', routeName: 'contracts' },
       { label: '用户管理', routeName: 'users', roles: ['ADMIN'] },
-      { label: '系统日志', routeName: 'system-logs', roles: ['ADMIN'] },
+      // 系统日志入口暂不呈现：其查看能力尚无后端读端点，避免指向无数据来源的死链（frontend-admin）。
+      // 待 system-log 查看能力交付后恢复 `{ label: '系统日志', routeName: 'system-logs', roles: ['ADMIN'] }`。
     ],
   },
 ]
