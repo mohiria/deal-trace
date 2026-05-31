@@ -21,8 +21,9 @@ import {
  * 详情页与抽屉共用同一实现，杜绝逻辑重写（design D1）。
  * 写入口的显隐叠加"线索是否结束"（D4 集中派生）；越权/失效以后端裁决回落（D5）。
  */
-const props = defineProps<{ leadId: number }>()
+const props = defineProps<{ leadId: number; skipFetch?: boolean }>()
 const leadId = props.leadId
+const emit = defineEmits<{ claim: [id: number] }>()
 
 const auth = useAuthStore()
 const leads = useLeadsStore()
@@ -44,6 +45,16 @@ const showRelease = computed(() => !closed.value && canSalesOwn.value)
 
 /** Admin 归属操作（design D3）：仅 ADMIN + 未结束线索呈现；按 ownerSalesId 分叉。 */
 const showOwnership = computed(() => auth.isAdmin && !closed.value)
+/** SALES 公海（无归属）未结束线索：抽屉只读摘要中提供认领入口（refine：公海抽屉脱敏只读 + 认领）。 */
+const showClaim = computed(
+  () => !auth.isAdmin && !closed.value && lead.value != null && lead.value.ownerSalesId == null,
+)
+
+function onClaim() {
+  if (lead.value != null) {
+    emit('claim', lead.value.id)
+  }
+}
 const isPool = computed(() => lead.value?.ownerSalesId == null)
 /** 分配候选 = 启用 Sales（D4）。 */
 const assignCandidates = computed(() => accounts.enabledSales)
@@ -215,8 +226,11 @@ async function onTransferConfirm() {
 }
 
 onMounted(() => {
-  void leads.loadLead(leadId)
-  void leads.loadProgress(leadId)
+  // skipFetch：SALES 公海只读摘要由父级以脱敏公海数据填充 currentLead，不调明文详情/进度端点。
+  if (!props.skipFetch) {
+    void leads.loadLead(leadId)
+    void leads.loadProgress(leadId)
+  }
   // Admin 需要启用 Sales 列表作分配 / 转移候选（D4）；Sales 详情不拉账号。
   if (auth.isAdmin) {
     void accounts.loadAccounts()
@@ -270,7 +284,7 @@ onMounted(() => {
         </div>
         <div class="field">
           <span>当前归属</span>
-          <strong>{{ lead.ownerSalesId == null ? '公海' : `销售 #${lead.ownerSalesId}` }}</strong>
+          <strong>{{ lead.ownerSalesId == null ? '公海' : (lead.ownerSalesName ?? '—') }}</strong>
         </div>
         <div class="field">
           <span>最后跟踪</span>
@@ -286,6 +300,13 @@ onMounted(() => {
     <a-alert v-if="lead.stage === '已流失'" type="warning" class="detail-lose">
       流失原因：{{ lead.loseReason ?? '—' }}<span v-if="lead.loseNote">；说明：{{ lead.loseNote }}</span>
     </a-alert>
+
+    <!-- SALES 公海只读摘要：仅认领入口（其余写入口按归属规则自然隐藏） -->
+    <div v-if="showClaim" class="detail-actions drawer-actions">
+      <a-button data-test="drawer-claim" class="claim-btn" type="primary" size="small" @click="onClaim">
+        认领该线索
+      </a-button>
+    </div>
 
     <!-- 写操作区：闭单只读时整体收起 -->
     <div v-if="showStageWinLose || showRelease" class="detail-actions drawer-actions">

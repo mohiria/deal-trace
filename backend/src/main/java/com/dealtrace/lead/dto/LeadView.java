@@ -8,7 +8,8 @@ import com.dealtrace.lead.entity.LeadStage;
 import java.time.LocalDateTime;
 
 /**
- * 对外详情视图（spec R1）：14 业务字段 + customerName / customerUsci 内联（design D8）。
+ * 对外详情视图（spec R1）：14 业务字段 + customerName / customerUsci / ownerSalesName 内联（design D8 / D1）。
+ * ownerSalesName：归属销售姓名，公海/无归属或归属账号缺失时为 null（由 service 解析后注入）。
  */
 public record LeadView(
     Long id,
@@ -21,6 +22,7 @@ public record LeadView(
     String contactPhone,
     String leadSource,
     Long ownerSalesId,
+    String ownerSalesName,
     String stage,
     LocalDateTime lastTrackedAt,
     String loseReason,
@@ -29,7 +31,12 @@ public record LeadView(
     LocalDateTime wonAt,
     LocalDateTime lostAt
 ) {
+    /** 不解析归属姓名的兼容构造（ownerSalesName=null）；优先用三参版本内联姓名。 */
     public static LeadView of(Lead l, Customer customer) {
+        return of(l, customer, null);
+    }
+
+    public static LeadView of(Lead l, Customer customer, String ownerSalesName) {
         BusinessType bt = l.getBusinessType();
         LeadStage st = l.getStage();
         return new LeadView(
@@ -43,6 +50,7 @@ public record LeadView(
             l.getContactPhone(),
             l.getLeadSource(),
             l.getOwnerSalesId(),
+            ownerSalesName,
             st == null ? null : st.getDbValue(),
             l.getLastTrackedAt(),
             l.getLoseReason(),

@@ -29,6 +29,8 @@ const search = ref('')
 const typeFilter = ref('')
 const stageFilter = ref('')
 const activeLeadId = ref<number | null>(null)
+/** SALES 公海线索抽屉只读脱敏模式：用已加载公海数据渲染，不调明文详情端点。 */
+const poolReadonly = ref(false)
 const claimingId = ref<number | null>(null)
 const createLeadVisible = ref(false)
 const currentPage = ref(1)
@@ -62,11 +64,20 @@ function selectTab(tab: LeadTab) {
 }
 
 function openLead(id: number) {
+  const row = currentRows.value.find((r) => r.id === id)
+  if (row?.ownerLabel === '公海' && !auth.isAdmin) {
+    // SALES 公海线索：用脱敏公海数据渲染只读摘要 + 认领入口，不取明文详情（PRD §7.5）。
+    leads.setCurrentFromPool(row as PoolLeadView)
+    poolReadonly.value = true
+  } else {
+    poolReadonly.value = false
+  }
   activeLeadId.value = id
 }
 
 function closeLeadDrawer() {
   activeLeadId.value = null
+  poolReadonly.value = false
 }
 
 const baseOwnedRows = computed<LeadView[]>(() => (auth.isAdmin ? leads.allLeads : leads.myLeads))
@@ -174,6 +185,7 @@ async function onClaim(id: number) {
     const claimed = await leads.claim(id)
     Message.success('认领成功，已移入我的线索')
     activeTab.value = 'mine'
+    poolReadonly.value = false
     activeLeadId.value = claimed.id
     await leads.loadMyLeads()
   } catch (e) {
@@ -199,8 +211,9 @@ async function refreshLeadListsAfterCreate() {
   await leads.loadPool()
 }
 
-function ownerText(lead: Pick<LeadView, 'ownerSalesId'>): string {
-  return lead.ownerSalesId == null ? '公海' : `销售 #${lead.ownerSalesId}`
+function ownerText(lead: Pick<LeadView, 'ownerSalesId' | 'ownerSalesName'>): string {
+  if (lead.ownerSalesId == null) return '公海'
+  return lead.ownerSalesName ?? '—'
 }
 
 function stageTone(stage: string | null): string {
@@ -361,7 +374,12 @@ onMounted(() => {
       >
         ×
       </button>
-      <LeadDetailPanel :key="activeLeadId" :lead-id="activeLeadId" />
+      <LeadDetailPanel
+        :key="activeLeadId"
+        :lead-id="activeLeadId"
+        :skip-fetch="poolReadonly"
+        @claim="onClaim"
+      />
     </aside>
     <CreateLeadModal v-model:visible="createLeadVisible" @created="refreshLeadListsAfterCreate" />
   </div>

@@ -375,3 +375,97 @@ describe('refine lead list iteration', () => {
     expect(wrapper.find('[data-test="create-lead-modal"]').exists()).toBe(true)
   })
 })
+
+describe('归属显示销售姓名（refine owner display）', () => {
+  it('归属列显示销售姓名而非 销售 #id 拼串', async () => {
+    const lead: LeadView = { ...SAMPLE_LEAD, id: 800, customerName: '归属客户', ownerSalesId: 7, ownerSalesName: '赵磊' }
+    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
+    const { wrapper } = await mountView({ admin: true, all: [lead] })
+    await flushPromises()
+
+    const ws = wrapper.find('[data-test="workbench-leads"]')
+    expect(ws.text()).toContain('赵磊')
+    expect(ws.text()).not.toContain('销售 #7')
+  })
+
+  it('无归属线索归属列显示公海', async () => {
+    const lead: LeadView = { ...SAMPLE_LEAD, id: 801, customerName: '无主客户', ownerSalesId: null, ownerSalesName: null }
+    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
+    const { wrapper } = await mountView({ admin: true, all: [lead] })
+    await flushPromises()
+
+    const ws = wrapper.find('[data-test="workbench-leads"]')
+    expect(ws.text()).toContain('公海')
+  })
+})
+
+describe('SALES 公海抽屉脱敏只读（refine pool drawer）', () => {
+  it('SALES 点公海线索抽屉显示脱敏电话且不调明文详情端点', async () => {
+    let detailCalls = 0
+    server.use(
+      http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)),
+      http.get('*/api/leads/:id', () => {
+        detailCalls += 1
+        return success({ ...SAMPLE_LEAD, id: 200, ownerSalesId: null, ownerSalesName: null, contactPhone: '13912344321' })
+      }),
+      progressList([]),
+    )
+    const { wrapper } = await mountView({ pool: [SAMPLE_POOL_LEAD] })
+    await flushPromises()
+
+    await wrapper.findAll('.tab').find((t) => t.text().includes('公海线索'))!.trigger('click')
+    await flushPromises()
+    await wrapper.find('[data-test="workbench-leads"] .lead-link').trigger('click')
+    await flushPromises()
+
+    const drawer = wrapper.find('[data-test="lead-drawer"]')
+    expect(drawer.exists()).toBe(true)
+    expect(drawer.text()).toContain('139****4321')
+    expect(drawer.text()).not.toContain('13912344321')
+    expect(detailCalls).toBe(0)
+  })
+
+  it('SALES 公海抽屉提供认领入口且不呈现写入口', async () => {
+    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)), progressList([]))
+    const { wrapper } = await mountView({ pool: [SAMPLE_POOL_LEAD] })
+    await flushPromises()
+
+    await wrapper.findAll('.tab').find((t) => t.text().includes('公海线索'))!.trigger('click')
+    await flushPromises()
+    await wrapper.find('[data-test="workbench-leads"] .lead-link').trigger('click')
+    await flushPromises()
+
+    const drawer = wrapper.find('[data-test="lead-drawer"]')
+    expect(drawer.find('[data-test="drawer-claim"]').exists()).toBe(true)
+    expect(drawer.find('.stage-btn').exists()).toBe(false)
+    expect(drawer.find('.win-open').exists()).toBe(false)
+    expect(drawer.find('.progress-form').exists()).toBe(false)
+  })
+})
+
+describe('抽屉切换即时刷新（refine drawer switch）', () => {
+  it('抽屉从名下线索切到公海线索即时刷新为脱敏摘要且不残留', async () => {
+    const owned: LeadView = { ...SAMPLE_LEAD, id: 900, customerName: '名下客户甲', contactPhone: '13800001111' }
+    server.use(
+      http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)),
+      http.get('*/api/leads/:id', () => success(owned)),
+      progressList([]),
+    )
+    const { wrapper } = await mountView({ mine: [owned], pool: [SAMPLE_POOL_LEAD] })
+    await flushPromises()
+
+    await wrapper.find('[data-test="workbench-leads"] .lead-link').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="lead-drawer"]').text()).toContain('名下客户甲')
+
+    await wrapper.findAll('.tab').find((t) => t.text().includes('公海线索'))!.trigger('click')
+    await flushPromises()
+    await wrapper.find('[data-test="workbench-leads"] .lead-link').trigger('click')
+    await flushPromises()
+
+    const drawer = wrapper.find('[data-test="lead-drawer"]')
+    expect(drawer.text()).toContain('公海客户甲')
+    expect(drawer.text()).toContain('139****4321')
+    expect(drawer.text()).not.toContain('名下客户甲')
+  })
+})
