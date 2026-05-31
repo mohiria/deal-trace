@@ -23,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -109,6 +110,35 @@ class LeadControllerDetailListTest extends IntegrationTest {
             .andExpect(jsonPath("$.data.id").value(leadOfAId))
             .andExpect(jsonPath("$.data.customerName").value("Detail Test Customer"))
             .andExpect(jsonPath("$.data.customerUsci").value(VALID_USCI));
+    }
+
+    @Test
+    void ownedLeadDetail_includesOwnerSalesName() throws Exception {
+        String token = jwtService.generateToken(admin);
+        mockMvc.perform(get("/leads/" + leadOfAId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.ownerSalesId").value(salesA.getId()))
+            .andExpect(jsonPath("$.data.ownerSalesName").value("Sales A"));
+    }
+
+    @Test
+    void poolLeadDetail_ownerSalesNameIsNull() throws Exception {
+        String token = jwtService.generateToken(admin);
+        mockMvc.perform(get("/leads/" + leadInPoolId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.ownerSalesId").value(nullValue()))
+            .andExpect(jsonPath("$.data.ownerSalesName").value(nullValue()));
+    }
+
+    @Test
+    void mineList_includesOwnerSalesName() throws Exception {
+        String token = jwtService.generateToken(salesA);
+        mockMvc.perform(get("/leads/mine")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[0].ownerSalesName").value("Sales A"));
     }
 
     @Test

@@ -81,6 +81,7 @@ export const SAMPLE_LEAD: LeadView = {
   contactPhone: '138****5678',
   leadSource: '官网咨询',
   ownerSalesId: 2,
+  ownerSalesName: '林雨',
   stage: '未触达',
   lastTrackedAt: null,
   loseReason: null,

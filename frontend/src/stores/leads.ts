@@ -67,9 +67,42 @@ export const useLeadsStore = defineStore('leads', () => {
     error.value = null
     try {
       currentLead.value = await fetchLead(id)
+    } catch (e) {
+      // 加载失败清空当前详情，杜绝抽屉残留上一条线索数据（refine：抽屉切换不残留）。
+      currentLead.value = null
+      throw e
     } finally {
       loading.value = false
     }
+  }
+
+  /**
+   * 以脱敏公海列表数据填充当前详情（refine：SALES 公海抽屉只读脱敏摘要）。
+   * 公海线索 ownerSalesId 恒为 null；进度对非归属 SALES 不可见，置空。
+   * 不调用明文详情端点，电话保持后端已脱敏值。
+   */
+  function setCurrentFromPool(p: PoolLeadView) {
+    currentLead.value = {
+      id: p.id,
+      customerId: p.customerId,
+      customerName: p.customerName,
+      customerUsci: p.customerUsci,
+      businessYear: p.businessYear,
+      businessType: p.businessType,
+      contactName: p.contactName,
+      contactPhone: p.contactPhone,
+      leadSource: p.leadSource,
+      ownerSalesId: null,
+      ownerSalesName: null,
+      stage: p.stage,
+      lastTrackedAt: p.lastTrackedAt,
+      loseReason: null,
+      loseNote: null,
+      createdAt: p.createdAt,
+      wonAt: null,
+      lostAt: null,
+    }
+    progress.value = []
   }
 
   async function loadProgress(id: number) {
@@ -166,6 +199,7 @@ export const useLeadsStore = defineStore('leads', () => {
     loadAllLeads,
     loadPool,
     loadLead,
+    setCurrentFromPool,
     loadProgress,
     claim,
     release,

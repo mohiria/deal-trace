@@ -189,4 +189,30 @@ public class LeadService {
         return customerMapper.selectBatchIds(ids).stream()
             .collect(Collectors.toMap(Customer::getId, c -> c));
     }
+
+    /**
+     * 解析单条线索归属销售姓名（design D1）：ownerSalesId 为空（公海/无归属）或账号缺失（停用/删号）返回 null。
+     */
+    public String ownerName(Long ownerSalesId) {
+        if (ownerSalesId == null) {
+            return null;
+        }
+        Account account = accountMapper.selectById(ownerSalesId);
+        return account == null ? null : account.getName();
+    }
+
+    /**
+     * 批量解析归属销售姓名映射（避免列表 N+1）：仅查非空 ownerSalesId，一次性 IN。
+     */
+    public Map<Long, String> loadOwnerNames(List<Lead> leads) {
+        Set<Long> ownerIds = leads.stream()
+            .map(Lead::getOwnerSalesId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        if (ownerIds.isEmpty()) {
+            return Map.of();
+        }
+        return accountMapper.selectBatchIds(ownerIds).stream()
+            .collect(Collectors.toMap(Account::getId, Account::getName));
+    }
 }

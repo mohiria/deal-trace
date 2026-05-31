@@ -6,7 +6,7 @@ import { apiClient } from './client'
  * `apiClient` 的响应拦截器已 unwrap 信封，故用双泛型 `<T, T>` 对齐实际返回类型。
  */
 
-/** 线索详情视图（对应后端 `LeadView`，17 字段）。 */
+/** 线索详情视图（对应后端 `LeadView`，18 字段）。 */
 export interface LeadView {
   id: number
   customerId: number
@@ -18,6 +18,8 @@ export interface LeadView {
   contactPhone: string | null
   leadSource: string | null
   ownerSalesId: number | null
+  /** 归属销售姓名；公海/无归属或归属账号缺失时为 null（后端内联）。 */
+  ownerSalesName: string | null
   stage: string | null
   lastTrackedAt: string | null
   loseReason: string | null

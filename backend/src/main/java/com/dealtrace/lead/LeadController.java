@@ -81,7 +81,7 @@ public class LeadController {
             @RequestBody CreateLeadRequest request) {
         Lead lead = leadService.create(request, principal);
         Customer customer = customerMapper.selectById(lead.getCustomerId());
-        return ApiResponse.ok(LeadView.of(lead, customer));
+        return ApiResponse.ok(LeadView.of(lead, customer, leadService.ownerName(lead.getOwnerSalesId())));
     }
 
     @GetMapping("/duplicate-check")
@@ -117,7 +117,7 @@ public class LeadController {
             @PathVariable Long id) {
         Lead lead = leadService.detailFor(id, principal);
         Customer customer = customerMapper.selectById(lead.getCustomerId());
-        return ApiResponse.ok(LeadView.of(lead, customer));
+        return ApiResponse.ok(LeadView.of(lead, customer, leadService.ownerName(lead.getOwnerSalesId())));
     }
 
     // ---- lead-ownership：公海列表 + 5 个归属写动作 ----
@@ -228,13 +228,14 @@ public class LeadController {
 
     private LeadView toView(Lead lead) {
         Customer customer = customerMapper.selectById(lead.getCustomerId());
-        return LeadView.of(lead, customer);
+        return LeadView.of(lead, customer, leadService.ownerName(lead.getOwnerSalesId()));
     }
 
     private List<LeadView> toViews(List<Lead> rows) {
         Map<Long, Customer> customers = leadService.loadCustomers(rows);
+        Map<Long, String> ownerNames = leadService.loadOwnerNames(rows);
         return rows.stream()
-            .map(l -> LeadView.of(l, customers.get(l.getCustomerId())))
+            .map(l -> LeadView.of(l, customers.get(l.getCustomerId()), ownerNames.get(l.getOwnerSalesId())))
             .toList();
     }
 }

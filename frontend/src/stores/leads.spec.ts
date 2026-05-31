@@ -55,6 +55,24 @@ describe('加载', () => {
   })
 })
 
+describe('loadLead 失败清空 currentLead（refine 抽屉不残留）', () => {
+  it('先成功载入后再载入失败时清空 currentLead，不残留前一条', async () => {
+    const { http, HttpResponse } = await import('msw')
+    server.use(leadDetail(SAMPLE_LEAD))
+    const store = useLeadsStore()
+    await store.loadLead(100)
+    expect(store.currentLead?.id).toBe(100)
+
+    server.use(
+      http.get('*/api/leads/:id', () =>
+        HttpResponse.json({ code: 'NOT_FOUND', message: '线索不存在', data: null }, { status: 404 }),
+      ),
+    )
+    await expect(store.loadLead(999)).rejects.toBeTruthy()
+    expect(store.currentLead).toBeNull()
+  })
+})
+
 describe('claim（认领联动）', () => {
   it('成功后从 pool 移除该线索', async () => {
     server.use(poolList([SAMPLE_POOL_LEAD]), claimSuccess())

@@ -41,6 +41,7 @@ function ownedLead(id: number, lastTrackedAt: string | null, stage = '初步沟�
     contactPhone: null,
     leadSource: null,
     ownerSalesId: 2,
+    ownerSalesName: '林雨',
     stage,
     lastTrackedAt,
     loseReason: null,
