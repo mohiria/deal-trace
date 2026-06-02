@@ -14,6 +14,7 @@ import com.dealtrace.lead.entity.Lead;
 import com.dealtrace.lead.entity.LeadStage;
 import com.dealtrace.lead.repository.LeadMapper;
 import com.dealtrace.security.AccountPrincipal;
+import com.dealtrace.systemlog.SystemLogDetails;
 import com.dealtrace.systemlog.SystemLogPort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -86,7 +87,8 @@ public class LeadOwnershipService {
         leadMapper.updateOwner(leadId, principal.id());
         lead.setOwnerSalesId(principal.id());
         record("LEAD_CLAIM", leadId, principal.id(),
-            "认领 | 原归属=" + POOL_LABEL + " | 新归属=" + ownerLabel(principal.id()));
+            "认领 | 原归属=" + POOL_LABEL + " | 新归属=" + ownerLabel(principal.id()),
+            SystemLogDetails.ownerChange(null, principal.id()));
         return lead;
     }
 
@@ -107,7 +109,8 @@ public class LeadOwnershipService {
         leadMapper.updateOwner(leadId, null);
         lead.setOwnerSalesId(null);
         record("LEAD_RELEASE", leadId, principal.id(),
-            "退回公海 | 原归属=" + ownerLabel(original) + " | 新归属=" + POOL_LABEL + " | 备注=" + note);
+            "退回公海 | 原归属=" + ownerLabel(original) + " | 新归属=" + POOL_LABEL + " | 备注=" + note,
+            SystemLogDetails.release(original, note));
         return lead;
     }
 
@@ -123,7 +126,8 @@ public class LeadOwnershipService {
         leadMapper.updateOwner(leadId, target.getId());
         lead.setOwnerSalesId(target.getId());
         record("LEAD_ASSIGN", leadId, principal.id(),
-            "分配 | 原归属=" + POOL_LABEL + " | 新归属=" + target.getEmail());
+            "分配 | 原归属=" + POOL_LABEL + " | 新归属=" + target.getEmail(),
+            SystemLogDetails.ownerChange(null, target.getId()));
         return lead;
     }
 
@@ -139,7 +143,8 @@ public class LeadOwnershipService {
         leadMapper.updateOwner(leadId, null);
         lead.setOwnerSalesId(null);
         record("LEAD_RECALL", leadId, principal.id(),
-            "回收 | 原归属=" + ownerLabel(original) + " | 新归属=" + POOL_LABEL);
+            "回收 | 原归属=" + ownerLabel(original) + " | 新归属=" + POOL_LABEL,
+            SystemLogDetails.ownerChange(original, null));
         return lead;
     }
 
@@ -159,7 +164,8 @@ public class LeadOwnershipService {
         leadMapper.updateOwner(leadId, target.getId());
         lead.setOwnerSalesId(target.getId());
         record("LEAD_TRANSFER", leadId, principal.id(),
-            "转移 | 原归属=" + ownerLabel(original) + " | 新归属=" + target.getEmail());
+            "转移 | 原归属=" + ownerLabel(original) + " | 新归属=" + target.getEmail(),
+            SystemLogDetails.ownerChange(original, target.getId()));
         return lead;
     }
 
@@ -198,8 +204,9 @@ public class LeadOwnershipService {
         return a == null ? ("账号#" + ownerId) : a.getEmail();
     }
 
-    private void record(String action, Long leadId, Long operatorId, String summary) {
-        systemLogPort.record(action, "LEAD", leadId, operatorId, summary);
+    private void record(String action, Long leadId, Long operatorId, String summary,
+                        Map<String, Object> detail) {
+        systemLogPort.record(action, "LEAD", leadId, operatorId, summary, detail);
     }
 
     private Map<Long, Customer> loadCustomers(List<Lead> leads) {

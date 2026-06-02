@@ -71,7 +71,8 @@ public class AdminAccountController {
         a.setUpdatedAt(now);
         accountMapper.insert(a);
 
-        systemLogPort.record("ACCOUNT_CREATE", "ACCOUNT", a.getId(), principal.id());
+        systemLogPort.record("ACCOUNT_CREATE", "ACCOUNT", a.getId(), principal.id(), null,
+            com.dealtrace.systemlog.SystemLogDetails.accountCreate(a.getName(), Role.SALES.name()));
 
         return ApiResponse.ok(AccountView.from(a));
     }
@@ -111,7 +112,8 @@ public class AdminAccountController {
         accountMapper.updateById(account);
 
         String action = target == AccountStatus.DISABLED ? "ACCOUNT_DISABLE" : "ACCOUNT_ENABLE";
-        systemLogPort.record(action, "ACCOUNT", account.getId(), principal.id());
+        systemLogPort.record(action, "ACCOUNT", account.getId(), principal.id(), null,
+            com.dealtrace.systemlog.SystemLogDetails.accountStatus(account.getName(), target.name()));
 
         return ApiResponse.ok(AccountView.from(account));
     }

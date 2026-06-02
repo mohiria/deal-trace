@@ -17,6 +17,7 @@ import {
   loseSuccess,
   mineLeads,
   progressList,
+  systemLogList,
   releaseSuccess,
   stageSuccess,
   winSuccess,
@@ -92,6 +93,24 @@ beforeEach(() => {
 })
 
 describe('详情与进度展示（R3）', () => {
+  it('系统日志只读时间线：倒序渲染、归属当前姓名与金额千分位（view-system-log）', async () => {
+    server.use(systemLogList([
+      { id: 2, action: 'LEAD_WIN', actionLabel: '标记赢单', operatorName: '林雨', createdAt: '2026-05-31T10:00:00', targetType: 'LEAD', targetId: 100, leadId: 100, detail: { contractAmount: '1234567.50', signedDate: '2026-05-31' }, summaryFallback: null },
+      { id: 1, action: 'LEAD_TRANSFER', actionLabel: '转移', operatorName: '系统管理员', createdAt: '2026-05-30T10:00:00', targetType: 'LEAD', targetId: 100, leadId: 100, detail: { fromOwnerName: '赵磊', toOwnerName: '林雨' }, summaryFallback: null },
+    ]))
+    const wrapper = await mountView()
+    const sys = wrapper.find('.detail-systemlog')
+    expect(sys.exists()).toBe(true)
+    const items = sys.findAll('.event')
+    expect(items.length).toBe(2)
+    // 后端倒序，前端原序渲染：赢单在前、转移在后
+    expect(items[0]!.text()).toContain('标记赢单')
+    expect(items[0]!.text()).toContain('1,234,567.50')
+    expect(items[1]!.text()).toContain('转移')
+    expect(items[1]!.text()).toContain('赵磊')
+    expect(items[1]!.text()).toContain('林雨')
+  })
+
   it('渲染客户/业务/归属/阶段', async () => {
     const wrapper = await mountView()
     expect(wrapper.text()).toContain(SAMPLE_LEAD.customerName!)
@@ -259,7 +278,8 @@ describe('闭单只读（R7）', () => {
     expect(wrapper.find('.win-open').exists()).toBe(false)
     expect(wrapper.find('.lose-open').exists()).toBe(false)
     expect(wrapper.find('.release-open').exists()).toBe(false)
-    expect(wrapper.html()).not.toContain('系统日志')
+    // 系统日志为只读时间线，闭单后仍展示（非写入口）
+    expect(wrapper.find('.detail-systemlog').exists()).toBe(true)
   })
 
   it('写操作遇 LEAD_ENDED_READONLY 提示并刷新只读态', async () => {

@@ -26,6 +26,8 @@ import com.dealtrace.progresslog.dto.AddProgressRequest;
 import com.dealtrace.progresslog.dto.ProgressLogView;
 import com.dealtrace.progresslog.service.ProgressLogService;
 import com.dealtrace.security.AccountPrincipal;
+import com.dealtrace.systemlog.dto.SystemLogView;
+import com.dealtrace.systemlog.service.SystemLogReadService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -57,6 +59,7 @@ public class LeadController {
     private final LeadClosureService closureService;
     private final LeadDuplicateService duplicateService;
     private final ProgressLogService progressLogService;
+    private final SystemLogReadService systemLogReadService;
     private final CustomerMapper customerMapper;
 
     public LeadController(LeadService leadService,
@@ -65,6 +68,7 @@ public class LeadController {
                           LeadClosureService closureService,
                           LeadDuplicateService duplicateService,
                           ProgressLogService progressLogService,
+                          SystemLogReadService systemLogReadService,
                           CustomerMapper customerMapper) {
         this.leadService = leadService;
         this.ownershipService = ownershipService;
@@ -72,6 +76,7 @@ public class LeadController {
         this.closureService = closureService;
         this.duplicateService = duplicateService;
         this.progressLogService = progressLogService;
+        this.systemLogReadService = systemLogReadService;
         this.customerMapper = customerMapper;
     }
 
@@ -224,6 +229,15 @@ public class LeadController {
             @AuthenticationPrincipal AccountPrincipal principal,
             @PathVariable Long id) {
         return ApiResponse.ok(progressLogService.list(id, principal));
+    }
+
+    // ---- system-log：读取线索系统日志（ADMIN 任意 / SALES 自己名下，否则 404 不泄漏；view-system-log）----
+
+    @GetMapping("/{id}/logs")
+    public ApiResponse<List<SystemLogView>> listLogs(
+            @AuthenticationPrincipal AccountPrincipal principal,
+            @PathVariable Long id) {
+        return ApiResponse.ok(systemLogReadService.listByLead(id, principal));
     }
 
     private LeadView toView(Lead lead) {

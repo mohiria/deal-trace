@@ -7,6 +7,7 @@ import com.dealtrace.account.entity.Role;
 import com.dealtrace.account.repository.AccountMapper;
 import com.dealtrace.auth.JwtService;
 import com.dealtrace.common.MultiTransactionalIntegrationTest;
+import com.dealtrace.systemlog.SystemLogDetails;
 import com.dealtrace.systemlog.SystemLogPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -103,7 +104,8 @@ class AdminAccountStatusControllerTest extends MultiTransactionalIntegrationTest
         assertThat(after.getDisabledAt()).isNotNull();
 
         Mockito.verify(systemLogPort, Mockito.times(1))
-            .record("ACCOUNT_DISABLE", "ACCOUNT", sales.getId(), admin.getId());
+            .record("ACCOUNT_DISABLE", "ACCOUNT", sales.getId(), admin.getId(), null,
+                SystemLogDetails.accountStatus("Sales", "DISABLED"));
     }
 
     @Test
@@ -126,7 +128,8 @@ class AdminAccountStatusControllerTest extends MultiTransactionalIntegrationTest
         assertThat(after.getDisabledAt()).isNull();
 
         Mockito.verify(systemLogPort, Mockito.times(1))
-            .record("ACCOUNT_ENABLE", "ACCOUNT", sales.getId(), admin.getId());
+            .record("ACCOUNT_ENABLE", "ACCOUNT", sales.getId(), admin.getId(), null,
+                SystemLogDetails.accountStatus("Sales", "ENABLED"));
     }
 
     @Test

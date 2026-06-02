@@ -35,7 +35,7 @@ export const SALES_USER: AuthUser = {
 
 export const FAKE_TOKEN = 'fake-jwt-token'
 
-function success<T>(data: T): ApiEnvelope<T> {
+export function success<T>(data: T): ApiEnvelope<T> {
   return { code: 'SUCCESS', message: 'OK', data }
 }
 
@@ -145,6 +145,11 @@ export function claimAlreadyClaimed(message = '该线索已被认领') {
 
 export function progressList(rows: ProgressLogView[] = [SAMPLE_PROGRESS]) {
   return http.get('*/api/leads/:id/progress', () => HttpResponse.json(success(rows)))
+}
+
+/** 线索系统日志（view-system-log）；面板挂载即拉取，默认空数组即可满足无关测试。 */
+export function systemLogList(rows: unknown[] = []) {
+  return http.get('*/api/leads/:id/logs', () => HttpResponse.json(success(rows)))
 }
 
 export function addProgressSuccess(entry: ProgressLogView = SAMPLE_PROGRESS) {
@@ -364,4 +369,4 @@ export function ownershipForbidden(path: string, message = '无权执行该操�
 }
 
 /** 默认 handler 集：登录成功 + me 成功（Admin）。 */
-export const handlers = [loginSuccess(), meSuccess()]
+export const handlers = [loginSuccess(), meSuccess(), systemLogList()]

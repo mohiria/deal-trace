@@ -129,7 +129,8 @@ public class LeadService {
             : accountMapper.selectById(ownerSalesId).getEmail();
         String summary = String.format("客户=%s | 类型=%s | 归属=%s",
             customer.getName(), type.getDbValue(), ownerLabel);
-        systemLogPort.record("LEAD_CREATE", "LEAD", lead.getId(), principal.id(), summary);
+        systemLogPort.record("LEAD_CREATE", "LEAD", lead.getId(), principal.id(), summary,
+            com.dealtrace.systemlog.SystemLogDetails.leadCreate(ownerSalesId, customer.getName(), type.getDbValue()));
 
         return lead;
     }

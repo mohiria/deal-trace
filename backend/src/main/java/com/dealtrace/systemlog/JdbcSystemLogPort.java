@@ -5,8 +5,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 /**
  * {@link SystemLogPort} 的 JDBC 真实实现：INSERT 一行到 {@code system_log} 表。
@@ -16,7 +18,8 @@ import java.time.LocalDateTime;
  * 失败上下文通过 SLF4J ERROR 留痕，便于运维事后对账。
  *
  * <p>多态 target：{@code targetType="LEAD"} 时 {@code lead_id=targetId}，否则 {@code lead_id=NULL}
- * （system-log spec R5）。{@code summary} 由调用方传入；account 事件通过 4 参 default 自动 null。
+ * （system-log spec R5）。{@code summary} 由调用方传入；结构化 {@code detail} 序列化为 JSON 入库
+ * （为 null 时存 SQL NULL），供读出侧组装展示（view-system-log）。
  */
 @Primary
 @Component
@@ -26,25 +29,31 @@ public class JdbcSystemLogPort implements SystemLogPort {
 
     private static final String INSERT_SQL =
         "INSERT INTO system_log "
-            + "(action, target_type, target_id, operator_id, lead_id, summary, created_at) "
-            + "VALUES (?, ?, ?, ?, ?, ?, ?)";
+            + "(action, target_type, target_id, operator_id, lead_id, summary, detail, created_at) "
+            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
     private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
 
-    public JdbcSystemLogPort(JdbcTemplate jdbcTemplate) {
+    public JdbcSystemLogPort(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
         this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
     }
 
     @Override
-    public void record(String action, String targetType, Long targetId, Long operatorId, String summary) {
+    public void record(String action, String targetType, Long targetId, Long operatorId,
+                       String summary, Map<String, Object> detail) {
         Long leadId = "LEAD".equals(targetType) ? targetId : null;
         LocalDateTime createdAt = LocalDateTime.now();
         try {
+            String detailJson = (detail == null || detail.isEmpty())
+                ? null
+                : objectMapper.writeValueAsString(detail);
             jdbcTemplate.update(INSERT_SQL,
-                action, targetType, targetId, operatorId, leadId, summary, createdAt);
-        } catch (RuntimeException ex) {
-            log.error("[systemlog] persist failed action={} targetType={} targetId={} operatorId={} summary={}",
-                action, targetType, targetId, operatorId, summary, ex);
+                action, targetType, targetId, operatorId, leadId, summary, detailJson, createdAt);
+        } catch (Exception ex) {
+            log.error("[systemlog] persist failed action={} targetType={} targetId={} operatorId={} summary={} detail={}",
+                action, targetType, targetId, operatorId, summary, detail, ex);
         }
     }
 }

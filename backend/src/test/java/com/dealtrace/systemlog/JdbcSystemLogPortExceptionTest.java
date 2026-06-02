@@ -11,6 +11,7 @@ import org.mockito.Mockito;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import tools.jackson.databind.json.JsonMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
@@ -48,20 +49,20 @@ class JdbcSystemLogPortExceptionTest {
     void record_jdbcThrows_doesNotPropagate() {
         JdbcTemplate jdbc = Mockito.mock(JdbcTemplate.class);
         // JdbcTemplate.update(String sql, Object... args) 的 varargs：用 8 个独立 any() 匹配
-        // (sql + action + targetType + targetId + operatorId + leadId + summary + createdAt)
-        // lead-core change 起 SystemLogPort 增 summary 参数，INSERT SQL 多一个绑定位
+        // (action + targetType + targetId + operatorId + leadId + summary + detail + createdAt)
+        // view-system-log change 起 INSERT SQL 增 detail 绑定位（共 8 个值参）
         Mockito.when(jdbc.update(anyString(),
-                any(), any(), any(), any(), any(), any(), any()))
+                any(), any(), any(), any(), any(), any(), any(), any()))
             .thenThrow(new DataAccessException("boom") {});
 
-        JdbcSystemLogPort port = new JdbcSystemLogPort(jdbc);
+        JdbcSystemLogPort port = new JdbcSystemLogPort(jdbc, JsonMapper.builder().build());
 
         assertThatNoException().isThrownBy(() ->
             port.record("ACCOUNT_DISABLE", "ACCOUNT", 500L, 7L));
 
         // 先确认 mock 真的拦到了调用（排除"matcher 不匹配 → 默认返回 0 → 没抛"路径）
         verify(jdbc).update(anyString(),
-            any(), any(), any(), any(), any(), any(), any());
+            any(), any(), any(), any(), any(), any(), any(), any());
 
         // SLF4J ERROR 行包含 action / targetType / targetId / operatorId
         assertThat(logAppender.list)

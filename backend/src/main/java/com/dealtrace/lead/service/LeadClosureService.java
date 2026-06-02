@@ -10,6 +10,7 @@ import com.dealtrace.lead.entity.LeadStage;
 import com.dealtrace.lead.entity.LoseReason;
 import com.dealtrace.lead.repository.LeadMapper;
 import com.dealtrace.security.AccountPrincipal;
+import com.dealtrace.systemlog.SystemLogDetails;
 import com.dealtrace.systemlog.SystemLogPort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,7 +65,8 @@ public class LeadClosureService {
         lead.setStage(LeadStage.WON);
         lead.setWonAt(now);
         systemLogPort.record("LEAD_WIN", "LEAD", leadId, principal.id(),
-            "标记赢单 | 合同金额=" + amount.toPlainString() + " | 签订日期=" + signedDate);
+            "标记赢单 | 合同金额=" + amount.toPlainString() + " | 签订日期=" + signedDate,
+            SystemLogDetails.win(amount, signedDate));
         return lead;
     }
 
@@ -90,7 +92,8 @@ public class LeadClosureService {
         lead.setLoseReason(reason.getDbValue());
         lead.setLoseNote(note);
         systemLogPort.record("LEAD_LOSE", "LEAD", leadId, principal.id(),
-            "标记流失 | 流失原因=" + reason.getDbValue() + " | 流失说明=" + (note == null ? "" : note));
+            "标记流失 | 流失原因=" + reason.getDbValue() + " | 流失说明=" + (note == null ? "" : note),
+            SystemLogDetails.lose(reason.getDbValue(), note));
         return lead;
     }
 

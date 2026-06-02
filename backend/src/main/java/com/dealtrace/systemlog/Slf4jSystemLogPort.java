@@ -4,6 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
+
 /**
  * {@link SystemLogPort} 的 NoOp 实现：只写 SLF4J INFO 日志，不落 DB。
  *
@@ -18,8 +20,9 @@ public class Slf4jSystemLogPort implements SystemLogPort {
     private static final Logger log = LoggerFactory.getLogger(Slf4jSystemLogPort.class);
 
     @Override
-    public void record(String action, String targetType, Long targetId, Long operatorId, String summary) {
-        log.info("[systemlog] action={} targetType={} targetId={} operatorId={} summary={}",
-            action, targetType, targetId, operatorId, summary);
+    public void record(String action, String targetType, Long targetId, Long operatorId,
+                       String summary, Map<String, Object> detail) {
+        log.info("[systemlog] action={} targetType={} targetId={} operatorId={} summary={} detail={}",
+            action, targetType, targetId, operatorId, summary, detail);
     }
 }

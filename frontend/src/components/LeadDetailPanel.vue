@@ -43,6 +43,39 @@ const showProgressAdd = computed(() => !closed.value && canSalesOwn.value)
 const showStageWinLose = computed(() => !closed.value && canStageActions.value)
 const showRelease = computed(() => !closed.value && canSalesOwn.value)
 
+/**
+ * 系统日志摘要展示：优先用结构化 detail（归属姓名由后端按当前账号解析、金额前端千分位），
+ * detail 为空（旧行）则回退后端 summaryFallback。归属/阶段/金额/原因按 action 语义组装。
+ */
+function logSummary(d: Record<string, unknown> | null, fallback: string | null): string {
+  if (!d) {
+    return fallback ?? '—'
+  }
+  const s = (k: string) => (d[k] == null ? '' : String(d[k]))
+  const parts: string[] = []
+  if ('fromOwnerName' in d || 'toOwnerName' in d) {
+    parts.push(`原归属 ${s('fromOwnerName') || '—'} → 新归属 ${s('toOwnerName') || '—'}`)
+  }
+  if ('ownerName' in d) {
+    parts.push(`归属 ${s('ownerName') || '公海'}`)
+  }
+  if ('fromStage' in d || 'toStage' in d) {
+    parts.push(`${s('fromStage') || '—'} → ${s('toStage') || '—'}`)
+  }
+  if ('contractAmount' in d) {
+    parts.push(`合同金额 ¥${formatAmount(s('contractAmount'))}`)
+    if (s('signedDate')) parts.push(`签订 ${s('signedDate')}`)
+  }
+  if ('loseReason' in d) {
+    parts.push(`流失原因 ${s('loseReason')}`)
+    if (s('loseNote')) parts.push(`说明 ${s('loseNote')}`)
+  }
+  if ('releaseNote' in d && s('releaseNote')) {
+    parts.push(`备注 ${s('releaseNote')}`)
+  }
+  return parts.length ? parts.join(' · ') : (fallback ?? '—')
+}
+
 /** Admin 归属操作（design D3）：仅 ADMIN + 未结束线索呈现；按 ownerSalesId 分叉。 */
 const showOwnership = computed(() => auth.isAdmin && !closed.value)
 /** SALES 公海（无归属）未结束线索：抽屉只读摘要中提供认领入口（refine：公海抽屉脱敏只读 + 认领）。 */
@@ -230,6 +263,7 @@ onMounted(() => {
   if (!props.skipFetch) {
     void leads.loadLead(leadId)
     void leads.loadProgress(leadId)
+    void leads.loadSystemLog(leadId)
   }
   // Admin 需要启用 Sales 列表作分配 / 转移候选（D4）；Sales 详情不拉账号。
   if (auth.isAdmin) {
@@ -373,6 +407,24 @@ onMounted(() => {
         </div>
       </div>
       <p v-else class="progress-empty">暂无进度跟踪</p>
+    </section>
+
+    <!-- 系统日志时间线（倒序，由后端保证顺序；归属/操作人按当前姓名，金额千分位）-->
+    <section class="detail-systemlog panel">
+      <div class="panel-title">
+        <span>系统日志</span>
+      </div>
+      <div v-if="leads.systemLog.length" class="progress-list" data-test="systemlog-list">
+        <div v-for="(s, index) in leads.systemLog" :key="s.id" class="event">
+          <div class="event-dot">{{ index + 1 }}</div>
+          <div class="event-body">
+            <strong>{{ s.actionLabel }} · {{ s.operatorName }}</strong>
+            <p class="progress-item-content">{{ logSummary(s.detail, s.summaryFallback) }}</p>
+            <span>{{ s.createdAt }}</span>
+          </div>
+        </div>
+      </div>
+      <p v-else class="progress-empty">暂无系统日志</p>
     </section>
 
     <!-- 赢单弹窗 -->

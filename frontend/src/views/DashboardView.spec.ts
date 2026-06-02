@@ -252,7 +252,7 @@ describe('右侧详情面板', () => {
     expect(drawer.text()).toContain(SAMPLE_LEAD.customerUsci!)
   })
 
-  it('打开已结束线索不呈现写入口且不含系统日志', async () => {
+  it('打开已结束线索不呈现写入口（系统日志只读时间线仍展示）', async () => {
     const won: LeadView = { ...SAMPLE_LEAD, stage: '已赢单', wonAt: '2026-05-10T09:00:00' }
     server.use(
       http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)),
@@ -268,7 +268,8 @@ describe('右侧详情面板', () => {
     expect(drawer.find('.stage-btn').exists()).toBe(false)
     expect(drawer.find('.win-open').exists()).toBe(false)
     expect(drawer.find('.release-open').exists()).toBe(false)
-    expect(drawer.html()).not.toContain('系统日志')
+    // 系统日志为只读时间线，闭单后仍应展示（不是写入口）
+    expect(drawer.find('.detail-systemlog').exists()).toBe(true)
   })
 })
 

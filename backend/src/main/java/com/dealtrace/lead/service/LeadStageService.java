@@ -71,7 +71,8 @@ public class LeadStageService {
         leadMapper.updateStage(leadId, target.getDbValue());
         lead.setStage(target);
         systemLogPort.record("LEAD_STAGE_CHANGE", "LEAD", leadId, principal.id(),
-            "阶段变更 | 原阶段=" + current.getDbValue() + " | 新阶段=" + target.getDbValue());
+            "阶段变更 | 原阶段=" + current.getDbValue() + " | 新阶段=" + target.getDbValue(),
+            com.dealtrace.systemlog.SystemLogDetails.stageChange(current.getDbValue(), target.getDbValue()));
         return lead;
     }
 }

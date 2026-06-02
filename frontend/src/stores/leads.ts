@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { LeadView, PoolLeadView, ProgressLogView } from '../api/leads'
+import type { SystemLogView } from '../api/systemLogs'
+import { fetchLeadLogs } from '../api/systemLogs'
 import {
   addProgress as apiAddProgress,
   assignLead as apiAssignLead,
@@ -29,6 +31,7 @@ export const useLeadsStore = defineStore('leads', () => {
   const pool = ref<PoolLeadView[]>([])
   const currentLead = ref<LeadView | null>(null)
   const progress = ref<ProgressLogView[]>([])
+  const systemLog = ref<SystemLogView[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -107,6 +110,11 @@ export const useLeadsStore = defineStore('leads', () => {
 
   async function loadProgress(id: number) {
     progress.value = await fetchProgress(id)
+  }
+
+  /** 读取线索系统日志时间线（倒序，由后端保证顺序）。 */
+  async function loadSystemLog(id: number) {
+    systemLog.value = await fetchLeadLogs(id)
   }
 
   /** 认领成功：线索移出公海（其余由调用方导航 / 刷新名下）。 */
@@ -193,6 +201,7 @@ export const useLeadsStore = defineStore('leads', () => {
     pool,
     currentLead,
     progress,
+    systemLog,
     loading,
     error,
     loadMyLeads,
@@ -201,6 +210,7 @@ export const useLeadsStore = defineStore('leads', () => {
     loadLead,
     setCurrentFromPool,
     loadProgress,
+    loadSystemLog,
     claim,
     release,
     addLeadProgress,

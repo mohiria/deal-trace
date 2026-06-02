@@ -66,6 +66,8 @@ class DashboardControllerTest extends IntegrationTest {
 
     @BeforeEach
     void seed() {
+        // 先清 lead 的子表（progress_log / contract）再删父表，避免共享库残留子行触发外键（@Rollback 内回滚，无持久影响）
+        jdbcTemplate.update("DELETE FROM progress_log");
         jdbcTemplate.update("DELETE FROM contract");
         leadMapper.delete(null);
         customerMapper.delete(null);

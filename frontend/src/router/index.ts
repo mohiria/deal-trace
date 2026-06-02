@@ -9,6 +9,7 @@ import PublicPoolView from '../views/PublicPoolView.vue'
 import LeadDetailView from '../views/LeadDetailView.vue'
 import CustomersView from '../views/CustomersView.vue'
 import UsersView from '../views/UsersView.vue'
+import SystemLogsView from '../views/SystemLogsView.vue'
 import { authGuard } from './guards'
 
 /**
@@ -34,10 +35,9 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '用户管理', requiresAdmin: true },
       },
       {
-        // 系统日志查看能力尚无后端读端点：路由保留占位、导航入口已移除（frontend-admin）。
         path: 'system-logs',
         name: 'system-logs',
-        component: PlaceholderView,
+        component: SystemLogsView,
         meta: { title: '系统日志', requiresAdmin: true },
       },
     ],
