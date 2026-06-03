@@ -2,7 +2,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 import AppShell from '../components/AppShell.vue'
-import PlaceholderView from '../views/PlaceholderView.vue'
 import DashboardView from '../views/DashboardView.vue'
 import MyLeadsView from '../views/MyLeadsView.vue'
 import PublicPoolView from '../views/PublicPoolView.vue'
@@ -10,6 +9,7 @@ import LeadDetailView from '../views/LeadDetailView.vue'
 import CustomersView from '../views/CustomersView.vue'
 import UsersView from '../views/UsersView.vue'
 import SystemLogsView from '../views/SystemLogsView.vue'
+import ContractsView from '../views/ContractsView.vue'
 import { authGuard } from './guards'
 
 /**
@@ -27,7 +27,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'public-pool', name: 'public-pool', component: PublicPoolView, meta: { title: '公海线索' } },
       { path: 'leads/:id', name: 'lead-detail', component: LeadDetailView, meta: { title: '线索详情' } },
       { path: 'customers', name: 'customers', component: CustomersView, meta: { title: '客户管理' } },
-      { path: 'contracts', name: 'contracts', component: PlaceholderView, meta: { title: '合同记录' } },
+      { path: 'contracts', name: 'contracts', component: ContractsView, meta: { title: '合同记录' } },
       {
         path: 'users',
         name: 'users',

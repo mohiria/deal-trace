@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -42,11 +43,19 @@ class AdminAccountControllerCreateTest extends IntegrationTest {
     @Autowired
     private JwtService jwtService;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     private Account admin;
     private Account sales;
 
     @BeforeEach
     void seed() {
+        // 删账号前先按外键顺序清子表（fk_contract_sales / fk_progress_tracker / fk_lead_owner 均引用 account）：
+        // 共享测试库若残留他测泄漏的 contract/progress_log/lead 行，DELETE FROM account 会撞 FK。
+        jdbcTemplate.update("DELETE FROM contract");
+        jdbcTemplate.update("DELETE FROM progress_log");
+        jdbcTemplate.update("DELETE FROM `lead`");
         accountMapper.delete(null);
         admin = insert("root-admin@dealtrace.test", "Root Admin", Role.ADMIN, AccountStatus.ENABLED);
         sales = insert("normal-sales@dealtrace.test", "Sales User", Role.SALES, AccountStatus.ENABLED);
