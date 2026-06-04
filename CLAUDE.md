@@ -18,7 +18,7 @@
 4. `openspec/changes/<change>/`（在途变更）
 5. `openspec/changes/<change>/qa/`（QA 产物）
 
-OpenSpec 输出或测试与 (1)(2) 冲突时**停下来触发 Requirement Conflict Gate**——不要私自放宽断言或改写期望行为。规则定义见 tech-arch §13.6 与 `.claude/skills/vibe-coding-qa/CLAUDE.md`。
+OpenSpec 输出或测试与 (1)(2) 冲突时**停下来触发 Requirement Conflict Gate**——不要私自放宽断言或改写期望行为。规则定义见 tech-arch §13.6 与 `.claude/skills/vibe-coding-qa/references/qa-constitution.md` 的「Requirement Authority And Conflict Rule」节。
 
 ## 两阶段工作流（硬约束）
 
@@ -50,6 +50,17 @@ OpenSpec 输出或测试与 (1)(2) 冲突时**停下来触发 Requirement Confli
 **反作弊**：禁止削弱断言、删负例、跳过测试、为让套件通过而改期望行为；改 / 删既有测试必须先声明需求权威依据。
 
 QA 设计 / 报告产物入 `openspec/changes/<change>/qa/`（用 `.claude/skills/vibe-coding-qa/templates/` 做骨架）；自动化测试代码入 `backend/src/test/...` 或 `frontend/src/**/*.test.ts` 或 `frontend/tests/e2e/...`，不入 `qa/`。
+
+### 阶段衔接闸门（apply 逐 task 生效，覆盖 opsx:apply 的默认循环）
+
+`/opsx:apply` 的内置循环是测试盲的（其原文是 "make the code changes required"，不提 TDD）。本节优先级高于该循环：**apply 每处理一个会改动生产代码的 task 之前先停**，逐条核对，任一不满足则该 task 不许进入写码——
+
+1. **合法 Red = 已运行 + 断言级失败**：必须先贴出该 Red 测试**实际运行**、因**预期行为原因**失败的输出（如 `expected X but got Y`、缺端点返回 404、断言不符）。没有运行输出 = 没有 Red。
+2. **以下一律判为「未达 Red / 阻塞」，不得当 Red 记**：编译失败、目标方法 / 类 / 端点尚不存在、导入错误、fixture / 环境 / 数据库连接失败。静态类型语言要拿到真 Red 的正解（先建最小可编译桩再写断言）见 `references/qa-constitution.md` §Mandatory TDD Rule。
+3. **`tasks.md` 的「写 Red」勾选标准**：充分条件是「贴出失败运行输出」；仅创建了测试文件、或测试还编译不过，都**不**能打 `[x]`。
+4. **产物顺序不可倒置**：`qa/test-design.md`（轻量测试设计）必须在该能力**第一行生产代码之前**存在；`qa/qa-report.md` 在末尾产出。**禁止**先写实现再回头补测试点（= constitution 的 "Do not generate tests directly from implementation code alone"）。
+
+无 hook 拦截时这仍是软约束，靠执行者在 apply 每个 task 前主动自检；但它把规则放在**决策发生的那一刻**，而非仅在本文件顶部陈述一次。
 
 ## 反直觉规则（不读会写错）
 
