@@ -44,16 +44,22 @@ $RECYCLE.BIN/
 
 # Obsidian 笔记缓存（与本项目无关的工作流文件）
 .obsidian
+
+# 其他 笔记缓存（与本项目无关的工作流文件）
 PPT/
 
 # omc skills 本地缓存（与项目无关的本地开发产物）
 .omc/
 
-# Claude Code 私有产物（项目级 .codex/ 整体忽略）
+# Codex及其他智能体 私有产物（项目级 .codex/ 整体忽略）
 .codex/
 .codex-run/
 .codex_run/
+.agents/
 
+# BMAD 私有产物（项目级 .bmad/ 整体忽略）
+_bmad/
+_bmad-output/
 
 # ============================================================================
 # Claude Code 私有产物（项目级 .claude/ 整体忽略）
