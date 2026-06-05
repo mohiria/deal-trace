@@ -19,6 +19,8 @@ import com.dealtrace.systemlog.SystemLogPort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -63,11 +65,13 @@ public class LeadOwnershipService {
             .orderByDesc("created_at")
             .last("LIMIT " + POOL_LIMIT));
         Map<Long, Customer> customers = loadCustomers(rows);
+        Map<Long, Set<String>> nonLostTypesByCustomer = loadNonLostBusinessTypes(rows);
         boolean admin = principal.role() == Role.ADMIN;
         return rows.stream()
             .map(l -> {
                 String phone = admin ? l.getContactPhone() : PhoneMasker.mask(l.getContactPhone());
-                return PoolLeadView.of(l, customers.get(l.getCustomerId()), phone);
+                boolean hasOther = customerHasOtherType(nonLostTypesByCustomer, l);
+                return PoolLeadView.of(l, customers.get(l.getCustomerId()), phone, hasOther);
             })
             .toList();
     }
@@ -216,5 +220,42 @@ public class LeadOwnershipService {
         Set<Long> ids = leads.stream().map(Lead::getCustomerId).collect(Collectors.toSet());
         return customerMapper.selectBatchIds(ids).stream()
             .collect(Collectors.toMap(Customer::getId, c -> c));
+    }
+
+    /**
+     * 一次性聚合公海行所属客户的「非已流失」线索业务类型集合（design D1，避免 N+1）。
+     * 仅取 customer_id + business_type 两列。
+     */
+    private Map<Long, Set<String>> loadNonLostBusinessTypes(List<Lead> poolRows) {
+        if (poolRows.isEmpty()) {
+            return Map.of();
+        }
+        Set<Long> customerIds = poolRows.stream().map(Lead::getCustomerId).collect(Collectors.toSet());
+        List<Lead> related = leadMapper.selectList(new QueryWrapper<Lead>()
+            .select("customer_id", "business_type")
+            .in("customer_id", customerIds)
+            .ne("stage", LeadStage.LOST.getDbValue()));
+        Map<Long, Set<String>> byCustomer = new HashMap<>();
+        for (Lead l : related) {
+            if (l.getBusinessType() == null) {
+                continue;
+            }
+            byCustomer.computeIfAbsent(l.getCustomerId(), k -> new HashSet<>())
+                .add(l.getBusinessType().getDbValue());
+        }
+        return byCustomer;
+    }
+
+    /**
+     * 该公海行的客户是否另有「不同业务类型、非已流失」线索（§7.6.4）。
+     * 公海行自身为非流失，其类型已在集合内；故等价于集合含任一异于本行类型的元素。
+     */
+    private boolean customerHasOtherType(Map<Long, Set<String>> typesByCustomer, Lead row) {
+        Set<String> types = typesByCustomer.get(row.getCustomerId());
+        if (types == null) {
+            return false;
+        }
+        String rowType = row.getBusinessType() == null ? null : row.getBusinessType().getDbValue();
+        return types.stream().anyMatch(t -> t != null && !t.equals(rowType));
     }
 }

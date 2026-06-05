@@ -8,6 +8,7 @@ import com.dealtrace.customer.repository.CustomerMapper;
 import com.dealtrace.lead.dto.AssignLeadRequest;
 import com.dealtrace.lead.dto.CreateLeadRequest;
 import com.dealtrace.lead.dto.DuplicateCheckResponse;
+import com.dealtrace.lead.dto.LeadOtherLeadView;
 import com.dealtrace.lead.dto.LeadView;
 import com.dealtrace.lead.dto.PoolLeadView;
 import com.dealtrace.lead.dto.LoseLeadRequest;
@@ -19,6 +20,7 @@ import com.dealtrace.lead.entity.BusinessType;
 import com.dealtrace.lead.entity.Lead;
 import com.dealtrace.lead.service.LeadDuplicateService;
 import com.dealtrace.lead.service.LeadClosureService;
+import com.dealtrace.lead.service.LeadOtherLeadsService;
 import com.dealtrace.lead.service.LeadOwnershipService;
 import com.dealtrace.lead.service.LeadService;
 import com.dealtrace.lead.service.LeadStageService;
@@ -58,6 +60,7 @@ public class LeadController {
     private final LeadStageService stageService;
     private final LeadClosureService closureService;
     private final LeadDuplicateService duplicateService;
+    private final LeadOtherLeadsService otherLeadsService;
     private final ProgressLogService progressLogService;
     private final SystemLogReadService systemLogReadService;
     private final CustomerMapper customerMapper;
@@ -67,6 +70,7 @@ public class LeadController {
                           LeadStageService stageService,
                           LeadClosureService closureService,
                           LeadDuplicateService duplicateService,
+                          LeadOtherLeadsService otherLeadsService,
                           ProgressLogService progressLogService,
                           SystemLogReadService systemLogReadService,
                           CustomerMapper customerMapper) {
@@ -75,6 +79,7 @@ public class LeadController {
         this.stageService = stageService;
         this.closureService = closureService;
         this.duplicateService = duplicateService;
+        this.otherLeadsService = otherLeadsService;
         this.progressLogService = progressLogService;
         this.systemLogReadService = systemLogReadService;
         this.customerMapper = customerMapper;
@@ -101,6 +106,21 @@ public class LeadController {
         int year = LocalDate.now().getYear();
         DuplicateCheckResponse resp = duplicateService.check(year, customerId, type);
         return ApiResponse.ok(resp);
+    }
+
+    /**
+     * 客户其他业务线索提示（spec customer-other-leads-hint，PRD §7.6.3/§7.6.5/§7.6.6）。
+     * authenticated；按角色裁剪在 service：ADMIN 全量、SALES 仅本人名下（design D4）。
+     * {@code excludeBusinessType} 选填——详情页传当前线索业务类型以排除自身业务线。
+     */
+    @GetMapping("/customer-other-leads")
+    public ApiResponse<List<LeadOtherLeadView>> customerOtherLeads(
+            @AuthenticationPrincipal AccountPrincipal principal,
+            @RequestParam Long customerId,
+            @RequestParam(required = false) String excludeBusinessType) {
+        BusinessType exclude = excludeBusinessType == null ? null
+            : BusinessType.fromDbValue(excludeBusinessType);
+        return ApiResponse.ok(otherLeadsService.otherLeadsFor(customerId, exclude, principal));
     }
 
     @GetMapping("/mine")

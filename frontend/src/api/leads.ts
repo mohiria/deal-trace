@@ -43,6 +43,18 @@ export interface PoolLeadView {
   stage: string | null
   lastTrackedAt: string | null
   createdAt: string | null
+  /** 该客户是否另有「不同业务类型、非已流失」线索（PRD §7.6.4）；SALES 浏览公海仅得此布尔，无详情。 */
+  customerHasOtherLeads: boolean
+}
+
+/**
+ * 客户其他业务线索提示项（对应后端 `LeadOtherLeadView`，PRD §7.6.3）。
+ * 仅含摘要字段：业务类型 / 归属销售（公海为「公海」）/ 当前阶段；不含联系方式与进度。
+ */
+export interface LeadOtherLeadView {
+  businessType: string | null
+  ownerSalesName: string | null
+  stage: string | null
 }
 
 /** 进度跟踪记录（对应后端 `ProgressLogView`）。 */
@@ -162,5 +174,19 @@ export function createLead(payload: CreateLeadPayload): Promise<LeadView> {
 export function duplicateCheck(customerId: number, businessType: string): Promise<DuplicateCheckResult> {
   return apiClient.get<DuplicateCheckResult, DuplicateCheckResult>('/leads/duplicate-check', {
     params: { customerId, businessType },
+  })
+}
+
+/**
+ * 客户其他业务线索提示（`GET /leads/customer-other-leads?customerId=&excludeBusinessType=`，PRD §7.6）。
+ * 按角色由后端裁剪：ADMIN 得全部其他业务线索摘要，SALES 仅得本人名下。`excludeBusinessType` 选填
+ * （详情页传当前业务类型以排除自身业务线）。无持久化副作用。
+ */
+export function fetchCustomerOtherLeads(
+  customerId: number,
+  excludeBusinessType?: string,
+): Promise<LeadOtherLeadView[]> {
+  return apiClient.get<LeadOtherLeadView[], LeadOtherLeadView[]>('/leads/customer-other-leads', {
+    params: excludeBusinessType ? { customerId, excludeBusinessType } : { customerId },
   })
 }

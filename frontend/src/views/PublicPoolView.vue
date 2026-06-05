@@ -23,7 +23,7 @@ const pageSize = 10
 const createLeadVisible = ref(false)
 
 const columns: TableColumnData[] = [
-  { title: '客户', dataIndex: 'customerName' },
+  { title: '客户', slotName: 'customerCell' },
   { title: '业务类型', dataIndex: 'businessType' },
   { title: '年度', dataIndex: 'businessYear' },
   { title: '联系人', dataIndex: 'contactName' },
@@ -110,6 +110,15 @@ onMounted(() => {
       :loading="leads.loading"
       row-key="id"
     >
+      <template #customerCell="{ record }">
+        <div class="pool-customer-name">{{ (record as PoolLeadView).customerName }}</div>
+        <span
+          v-if="(record as PoolLeadView).customerHasOtherLeads"
+          class="other-leads-flag"
+        >
+          该客户已有其他业务线索
+        </span>
+      </template>
       <template #operations="{ record }">
         <a-button
           type="primary"
@@ -194,6 +203,22 @@ onMounted(() => {
   padding: 24px;
   text-align: center;
   color: var(--dt-muted, #70778c);
+}
+
+.pool-customer-name {
+  font-size: 13px;
+  color: var(--dt-text, #202438);
+}
+
+.other-leads-flag {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: var(--dt-brand-soft, #eaf0ff);
+  color: var(--dt-brand, #2563ff);
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .pool-page :deep(.arco-table-th) {

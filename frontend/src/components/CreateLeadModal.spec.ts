@@ -7,11 +7,13 @@ import { server } from '../test/msw/server'
 import {
   SALES_USER,
   SAMPLE_CUSTOMER,
+  SAMPLE_OTHER_LEADS,
   customerSearch,
   createLeadValidation,
   duplicateCheckBlockedActive,
   duplicateCheckCanCreate,
   duplicateCheckWithHistoricalLost,
+  leadCustomerOtherLeads,
 } from '../test/msw/handlers'
 import { useAuthStore } from '../stores/auth'
 import CreateLeadModal from './CreateLeadModal.vue'
@@ -79,6 +81,25 @@ describe('CreateLeadModal', () => {
 
     expect(wrapper.find('.lead-block').exists()).toBe(true)
     expect(posted).toBe(false)
+  })
+
+  it('选定客户与业务类型后展示该客户其他业务线索（类型/归属/阶段）', async () => {
+    server.use(
+      customerSearch([SAMPLE_CUSTOMER], [SAMPLE_CUSTOMER]),
+      duplicateCheckCanCreate(),
+      leadCustomerOtherLeads(SAMPLE_OTHER_LEADS),
+    )
+    const wrapper = await mountModal()
+
+    await selectCustomer(wrapper)
+    await chooseType(wrapper)
+    await flushPromises()
+
+    const hint = wrapper.find('.other-leads-hint')
+    expect(hint.exists()).toBe(true)
+    expect(hint.text()).toContain('定制开发')
+    expect(hint.text()).toContain('赵磊')
+    expect(hint.text()).toContain('方案报价')
   })
 
   it('仅有历史流失时展示提示且允许提交', async () => {

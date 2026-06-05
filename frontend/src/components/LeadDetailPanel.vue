@@ -5,6 +5,8 @@ import { useAuthStore } from '../stores/auth'
 import { useLeadsStore } from '../stores/leads'
 import { useAccountsStore } from '../stores/accounts'
 import { ApiError } from '../api/client'
+import { fetchCustomerOtherLeads } from '../api/leads'
+import type { LeadOtherLeadView } from '../api/leads'
 import {
   ACTIVE_STAGES,
   LOSE_REASONS,
@@ -31,6 +33,11 @@ const accounts = useAccountsStore()
 
 const lead = computed(() => leads.currentLead)
 const closed = computed(() => isClosed(lead.value?.stage))
+/**
+ * 同客户其他业务线索（PRD §7.6.6）：按角色由后端裁剪——SALES 仅得本人名下，ADMIN 得全部。
+ * 仅在拉取明文详情（非脱敏公海抽屉）时加载，避免向公海浏览的 SALES 泄漏他人详情（§7.6.5）。
+ */
+const otherLeads = ref<LeadOtherLeadView[]>([])
 const isOwner = computed(
   () => lead.value != null && auth.currentUser != null && lead.value.ownerSalesId === auth.currentUser.id,
 )
@@ -258,10 +265,23 @@ async function onTransferConfirm() {
   }
 }
 
+async function loadOtherLeads() {
+  const l = lead.value
+  if (!l) {
+    return
+  }
+  try {
+    otherLeads.value = await fetchCustomerOtherLeads(l.customerId, l.businessType ?? undefined)
+  } catch {
+    otherLeads.value = []
+  }
+}
+
 onMounted(() => {
-  // skipFetch：SALES 公海只读摘要由父级以脱敏公海数据填充 currentLead，不调明文详情/进度端点。
+  // skipFetch：SALES 公海只读摘要由父级以脱敏公海数据填充 currentLead，不调明文详情/进度端点，
+  // 也不拉取其他业务线索（§7.6.5：公海浏览的 SALES 不可见他人详情）。
   if (!props.skipFetch) {
-    void leads.loadLead(leadId)
+    void leads.loadLead(leadId).then(loadOtherLeads)
     void leads.loadProgress(leadId)
     void leads.loadSystemLog(leadId)
   }
@@ -329,6 +349,17 @@ onMounted(() => {
           <strong>{{ lead.createdAt ?? '—' }}</strong>
         </div>
       </div>
+    </section>
+
+    <section v-if="otherLeads.length" class="detail-other-leads panel soft">
+      <div class="panel-title"><span>该客户其他业务线索</span></div>
+      <ul class="other-leads-list">
+        <li v-for="(item, index) in otherLeads" :key="index" class="other-leads-item">
+          <span class="ol-type">{{ item.businessType }}</span>
+          <span class="ol-owner">{{ item.ownerSalesName }}</span>
+          <span class="ol-stage">{{ item.stage }}</span>
+        </li>
+      </ul>
     </section>
 
     <a-alert v-if="lead.stage === '已流失'" type="warning" class="detail-lose">
@@ -765,6 +796,24 @@ onMounted(() => {
 }
 
 .ownership-empty {
+  color: var(--dt-muted, #70778c);
+}
+
+.other-leads-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.other-leads-item {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.other-leads-item .ol-owner,
+.other-leads-item .ol-stage {
   color: var(--dt-muted, #70778c);
 }
 

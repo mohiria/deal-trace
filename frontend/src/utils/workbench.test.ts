@@ -26,6 +26,7 @@ function poolLead(id: number): PoolLeadView {
     stage: '初步沟通',
     lastTrackedAt: null,
     createdAt: '2026-05-01T09:00:00',
+    customerHasOtherLeads: false,
   }
 }
 

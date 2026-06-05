@@ -67,7 +67,7 @@ export function meUnauthorized(message = '登录状态已失效') {
 
 // ---- frontend-lead-flow：/leads/* handler 工厂 ----
 
-import type { LeadView, PoolLeadView, ProgressLogView } from '../../api/leads'
+import type { LeadOtherLeadView, LeadView, PoolLeadView, ProgressLogView } from '../../api/leads'
 
 /** 一条样例名下线索（未触达，非结束）。 */
 export const SAMPLE_LEAD: LeadView = {
@@ -105,6 +105,18 @@ export const SAMPLE_POOL_LEAD: PoolLeadView = {
   stage: '初步沟通',
   lastTrackedAt: null,
   createdAt: '2026-04-20T14:00:00',
+  customerHasOtherLeads: false,
+}
+
+/** 一组样例「客户其他业务线索」摘要（含他人名下 + 公海，仅 ADMIN 视角能看到全部）。 */
+export const SAMPLE_OTHER_LEADS: LeadOtherLeadView[] = [
+  { businessType: '定制开发', ownerSalesName: '赵磊', stage: '方案报价' },
+  { businessType: 'BIM培训', ownerSalesName: '公海', stage: '未触达' },
+]
+
+/** 客户其他业务线索提示（`GET /leads/customer-other-leads`）。默认空数组。 */
+export function leadCustomerOtherLeads(rows: LeadOtherLeadView[] = []) {
+  return http.get('*/api/leads/customer-other-leads', () => HttpResponse.json(success(rows)))
 }
 
 export const SAMPLE_PROGRESS: ProgressLogView = {
@@ -368,5 +380,5 @@ export function ownershipForbidden(path: string, message = '无权执行该操�
   )
 }
 
-/** 默认 handler 集：登录成功 + me 成功（Admin）。 */
-export const handlers = [loginSuccess(), meSuccess(), systemLogList()]
+/** 默认 handler 集：登录成功 + me 成功（Admin）+ 客户其他业务线索默认空（避免 onUnhandledRequest 报错）。 */
+export const handlers = [loginSuccess(), meSuccess(), systemLogList(), leadCustomerOtherLeads()]

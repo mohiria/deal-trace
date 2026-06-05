@@ -126,3 +126,25 @@ describe('refine public pool list iteration', () => {
     expect(wrapper.find('.claim-btn').exists()).toBe(true)
   })
 })
+
+describe('客户其他业务线索提示（PRD §7.6.4）', () => {
+  const ROW_WITH = { ...SAMPLE_POOL_LEAD, id: 201, customerName: '有其他线索客户', customerHasOtherLeads: true }
+  const ROW_WITHOUT = { ...SAMPLE_POOL_LEAD, id: 202, customerName: '无其他线索客户', customerHasOtherLeads: false }
+
+  it('仅对 customerHasOtherLeads=true 的行展示「该客户已有其他业务线索」', async () => {
+    server.use(poolList([ROW_WITH, ROW_WITHOUT]))
+    const wrapper = await mountView(SALES_USER)
+
+    const flags = wrapper.findAll('.other-leads-flag')
+    expect(flags).toHaveLength(1)
+    expect(flags[0]!.text()).toContain('该客户已有其他业务线索')
+    expect(wrapper.text()).toContain('有其他线索客户')
+    expect(wrapper.text()).toContain('无其他线索客户')
+  })
+
+  it('全部 false 时不展示提示', async () => {
+    server.use(poolList([ROW_WITHOUT]))
+    const wrapper = await mountView(SALES_USER)
+    expect(wrapper.findAll('.other-leads-flag')).toHaveLength(0)
+  })
+})

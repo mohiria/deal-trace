@@ -29,7 +29,9 @@ import {
   transferSuccess,
   transferSameOwner,
   ownershipEndedReadonly,
+  leadCustomerOtherLeads,
 } from '../test/msw/handlers'
+import type { LeadOtherLeadView } from '../api/leads'
 import type { LeadView, ProgressLogView } from '../api/leads'
 import type { AccountView } from '../api/accounts'
 import { useAuthStore } from '../stores/auth'
@@ -51,6 +53,7 @@ interface MountOpts {
   role?: typeof ADMIN_USER
   lead?: LeadView
   progressRows?: ProgressLogView[]
+  otherLeads?: LeadOtherLeadView[]
 }
 
 /** 归属候选样例：两个启用 Sales（id2 林雨 / id3 赵磊）+ 一个停用 Sales + Admin。enabledSales = [林雨, 赵磊]。 */
@@ -64,7 +67,14 @@ async function mountView(opts: MountOpts = {}): Promise<VueWrapper> {
   const lead = opts.lead ?? SAMPLE_LEAD
   const rows = opts.progressRows ?? [SAMPLE_PROGRESS]
   // Admin 挂载会拉账号列表作归属候选（D4）；始终注册避免 onUnhandledRequest:'error'。
-  server.use(leadDetail(lead), progressList(rows), accountsList([ACCT_ADMIN, ACCT_SALES_A, ACCT_SALES_B, ACCT_SALES_OFF]))
+  // leadCustomerOtherLeads 须在 leadDetail 之前注册：其精确路径优先于 `/leads/:id` 通配，
+  // 否则 `/leads/customer-other-leads` 会被 `:id` 误捕获（MSW 按注册序首个命中）。
+  server.use(
+    leadCustomerOtherLeads(opts.otherLeads ?? []),
+    leadDetail(lead),
+    progressList(rows),
+    accountsList([ACCT_ADMIN, ACCT_SALES_A, ACCT_SALES_B, ACCT_SALES_OFF]),
+  )
 
   const store = useAuthStore()
   store.currentUser = role
@@ -117,6 +127,20 @@ describe('详情与进度展示（R3）', () => {
     expect(wrapper.text()).toContain(SAMPLE_LEAD.customerUsci!)
     expect(wrapper.text()).toContain(SAMPLE_LEAD.contactName!)
     expect(wrapper.text()).toContain('未触达')
+  })
+
+  it('详情展示该客户其他业务线索（§7.6.6，后端按角色裁剪后返回）', async () => {
+    const own: LeadOtherLeadView[] = [{ businessType: 'BIM培训', ownerSalesName: '林雨', stage: '初步沟通' }]
+    const wrapper = await mountView({ otherLeads: own })
+    const section = wrapper.find('.detail-other-leads')
+    expect(section.exists()).toBe(true)
+    expect(section.text()).toContain('BIM培训')
+    expect(section.text()).toContain('初步沟通')
+  })
+
+  it('无其他业务线索时不展示该区块', async () => {
+    const wrapper = await mountView({ otherLeads: [] })
+    expect(wrapper.find('.detail-other-leads').exists()).toBe(false)
   })
 
   it('已流失线索展示流失原因与说明', async () => {

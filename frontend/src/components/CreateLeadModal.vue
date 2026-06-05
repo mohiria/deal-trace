@@ -2,8 +2,8 @@
 import { computed, ref, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { ApiError } from '../api/client'
-import { createLead, duplicateCheck } from '../api/leads'
-import type { DuplicateCheckResult } from '../api/leads'
+import { createLead, duplicateCheck, fetchCustomerOtherLeads } from '../api/leads'
+import type { DuplicateCheckResult, LeadOtherLeadView } from '../api/leads'
 import { useAuthStore } from '../stores/auth'
 import { BUSINESS_TYPES, isValidContactPhone } from '../utils/lead'
 import type { CustomerView } from '../api/customers'
@@ -27,6 +27,7 @@ const selectedCustomer = ref<CustomerView | null>(null)
 const leadForm = ref({ businessType: '', contactName: '', contactPhone: '', leadSource: '' })
 const ownerMode = ref<'self' | 'pool'>('self')
 const dupResult = ref<DuplicateCheckResult | null>(null)
+const otherLeads = ref<LeadOtherLeadView[]>([])
 const submittingLead = ref(false)
 
 function resetForm() {
@@ -35,6 +36,7 @@ function resetForm() {
   leadForm.value = { businessType: '', contactName: '', contactPhone: '', leadSource: '' }
   ownerMode.value = 'self'
   dupResult.value = null
+  otherLeads.value = []
 }
 
 watch(
@@ -55,6 +57,7 @@ watch(
   async ([id, type]) => {
     if (id == null || !type) {
       dupResult.value = null
+      otherLeads.value = []
       return
     }
     try {
@@ -64,6 +67,12 @@ watch(
       if (error instanceof ApiError) {
         Message.error(error.message)
       }
+    }
+    // 客户其他业务线索提示（PRD §7.6.3，按角色由后端裁剪）；失败静默不阻断创建。
+    try {
+      otherLeads.value = await fetchCustomerOtherLeads(id, type)
+    } catch {
+      otherLeads.value = []
     }
   },
 )
@@ -159,6 +168,17 @@ async function onCreateLead() {
         </ul>
       </div>
 
+      <div v-if="otherLeads.length > 0" class="other-leads-hint">
+        <p class="other-leads-title">该客户已有其他业务线索：</p>
+        <ul>
+          <li v-for="(item, index) in otherLeads" :key="index" class="other-leads-item">
+            <span class="ol-type">{{ item.businessType }}</span>
+            <span class="ol-owner">{{ item.ownerSalesName }}</span>
+            <span class="ol-stage">{{ item.stage }}</span>
+          </li>
+        </ul>
+      </div>
+
       <a-form-item label="联系人" required>
         <a-input v-model="leadForm.contactName" class="lead-contact-name" placeholder="联系人姓名（必填）" />
       </a-form-item>
@@ -212,6 +232,31 @@ async function onCreateLead() {
 }
 
 .historical-lost-item {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.other-leads-hint {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: var(--dt-radius-sm, 6px);
+  background: var(--dt-brand-soft, #eaf0ff);
+  color: var(--dt-text, #202438);
+  font-size: 13px;
+}
+
+.other-leads-title {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.other-leads-hint ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.other-leads-item {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
