@@ -68,6 +68,28 @@ describe('客户可搜索下拉（spec R3）', () => {
     expect(wrapper.find('.cs-create-shortcut').exists()).toBe(false)
   })
 
+  it('父层把 modelValue 外部重置为 null 时清掉已选残留（修复跨次打开"显示已选 A 却提示未选"）', async () => {
+    server.use(customerSearch([SAMPLE_CUSTOMER]))
+    const wrapper = mountSelect()
+
+    await wrapper.find('.cs-search').setValue('建筑')
+    await tick()
+    await flushPromises()
+    await wrapper.find('.cs-option').trigger('click')
+    // 模拟父层 v-model 回填选中 id（choose emit 后 selectedCustomerId 变为该 id）
+    await wrapper.setProps({ modelValue: SAMPLE_CUSTOMER.id })
+
+    // 选中后展示"已选客户：…"
+    expect(wrapper.find('.cs-selected').exists()).toBe(true)
+    expect(wrapper.find('.cs-selected').text()).toContain(SAMPLE_CUSTOMER.name)
+
+    // 父层重置（弹窗重开 resetForm → selectedCustomerId 置 null）
+    await wrapper.setProps({ modelValue: null })
+
+    expect(wrapper.find('.cs-selected').exists()).toBe(false)
+    expect(wrapper.find('.cs-search').element).toHaveProperty('value', '')
+  })
+
   // 引用以避免未使用告警
   void vi
 })

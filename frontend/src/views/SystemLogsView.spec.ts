@@ -65,6 +65,13 @@ describe('系统日志全局浏览（spec R2）', () => {
     expect(text).toContain('销售甲')
   })
 
+  it('时间列统一渲染为秒级（去 T、到秒）', async () => {
+    const wrapper = await mountView([logRow({ createdAt: '2026-05-31T10:00:00' })])
+    const text = wrapper.find('[data-test="systemlog-table"]').text()
+    expect(text).toContain('2026-05-31 10:00:00')
+    expect(text).not.toContain('2026-05-31T10:00:00')
+  })
+
   it('赢单金额千分位展示（金额为后端精确字符串）', async () => {
     const wrapper = await mountView([
       logRow({ action: 'LEAD_WIN', actionLabel: '标记赢单', detail: { contractAmount: '1234567.50', signedDate: '2026-05-31' } }),

@@ -55,7 +55,7 @@ async function onSubmit(data: {
           <a-input v-model="form.email" placeholder="name@example.com" allow-clear />
         </a-form-item>
         <a-form-item field="password" label="密码">
-          <a-input-password v-model="form.password" placeholder="请输入密码" allow-clear />
+          <a-input-password v-model="form.password" placeholder="请输入密码" allow-clear @copy.prevent @cut.prevent />
         </a-form-item>
 
         <a-alert v-if="errorMessage" type="error" class="login-error">{{ errorMessage }}</a-alert>

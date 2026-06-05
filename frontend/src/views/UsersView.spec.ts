@@ -13,6 +13,7 @@ import {
   statusToggleSuccess,
 } from '../test/msw/handlers'
 import type { AccountView } from '../api/accounts'
+import { formatDateTime } from '../utils/datetime'
 import { useAuthStore } from '../stores/auth'
 import UsersView from './UsersView.vue'
 
@@ -44,7 +45,8 @@ describe('账号列表（spec：查看账号列表）', () => {
     expect(wrapper.text()).toContain(ADMIN.email)
     expect(wrapper.text()).toContain(SALES_ON.name)
     expect(wrapper.text()).toContain(SALES_OFF.email)
-    expect(wrapper.text()).toContain(SALES_OFF.createdAt!)
+    // 创建时间列统一格式化到秒（去 T）
+    expect(wrapper.text()).toContain(formatDateTime(SALES_OFF.createdAt))
     // 列表数据不含密码哈希等敏感字段（账号行仅 email/name/role/status/createdAt）
     expect(wrapper.find('.users-table').html()).not.toContain('passwordHash')
     expect(wrapper.find('.users-table').html()).not.toContain('password')

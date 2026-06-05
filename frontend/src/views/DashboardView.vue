@@ -5,6 +5,7 @@ import { Message } from '@arco-design/web-vue'
 import { fetchDashboard } from '../api/dashboard'
 import type { DashboardView } from '../api/dashboard'
 import { formatLossRate, formatWonAmount } from '../utils/dashboard'
+import { formatDateTime } from '../utils/datetime'
 import { useAuthStore } from '../stores/auth'
 import { useLeadsStore } from '../stores/leads'
 import { ApiError } from '../api/client'
@@ -230,10 +231,6 @@ function typeTone(type: string | null): string {
   return 'purple'
 }
 
-function formatDate(raw: string | null | undefined): string {
-  if (!raw) return '暂无'
-  return raw.replace('T', ' ').slice(0, 16)
-}
 
 onMounted(() => {
   void loadDashboard()
@@ -336,7 +333,7 @@ onMounted(() => {
                 <td><span class="tag" :class="stageTone(lead.stage)">{{ lead.stage ?? '—' }}</span></td>
                 <td>{{ lead.contactName ?? '—' }}</td>
                 <td><span class="tag" :class="lead.ownerLabel === '公海' ? 'orange' : 'blue'">{{ lead.ownerLabel }}</span></td>
-                <td>{{ formatDate(lead.lastTrackedAt) }}</td>
+                <td>{{ formatDateTime(lead.lastTrackedAt, '暂无') }}</td>
                 <td>
                   <div class="row-actions">
                     <button class="mini-btn primary" type="button" @click="openLead(lead.id)">详情</button>

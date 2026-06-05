@@ -6,6 +6,7 @@ import { createLead, duplicateCheck, fetchCustomerOtherLeads } from '../api/lead
 import type { DuplicateCheckResult, LeadOtherLeadView } from '../api/leads'
 import { useAuthStore } from '../stores/auth'
 import { BUSINESS_TYPES, isValidContactPhone } from '../utils/lead'
+import { formatDateTime } from '../utils/datetime'
 import type { CustomerView } from '../api/customers'
 import CustomerSelect from './CustomerSelect.vue'
 
@@ -161,7 +162,7 @@ async function onCreateLead() {
         <p class="historical-lost-title">该客户该业务类型历史流失记录：</p>
         <ul>
           <li v-for="(entry, index) in dupResult.historicalLost" :key="index" class="historical-lost-item">
-            <span class="hl-time">{{ entry.lostAt }}</span>
+            <span class="hl-time">{{ formatDateTime(entry.lostAt) }}</span>
             <span class="hl-reason">{{ entry.loseReason }}</span>
             <span v-if="entry.loseNote" class="hl-note">{{ entry.loseNote }}</span>
           </li>

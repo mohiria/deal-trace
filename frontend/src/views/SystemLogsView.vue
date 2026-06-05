@@ -5,6 +5,7 @@ import type { TableColumnData } from '@arco-design/web-vue'
 import { ApiError } from '../api/client'
 import { fetchSystemLogs } from '../api/systemLogs'
 import type { SystemLogView, SystemLogQuery } from '../api/systemLogs'
+import { formatDateTime } from '../utils/datetime'
 
 /**
  * 系统日志（全局浏览，spec R2）。仅 Admin 可达（路由 requiresAdmin + 后端 /admin/** 兜底）。
@@ -32,7 +33,7 @@ const TARGET_OPTIONS = [
 ]
 
 const columns: TableColumnData[] = [
-  { title: '时间', dataIndex: 'createdAt', width: 180 },
+  { title: '时间', width: 180, render: ({ record }) => formatDateTime((record as SystemLogView).createdAt) },
   { title: '操作人', dataIndex: 'operatorName', width: 120 },
   { title: '动作', slotName: 'action', width: 110 },
   { title: '目标', slotName: 'target', width: 140 },

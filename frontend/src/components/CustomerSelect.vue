@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { searchCustomers } from '../api/customers'
 import type { CustomerView } from '../api/customers'
 
@@ -58,6 +58,20 @@ function choose(customer: CustomerView) {
   options.value = []
   open.value = false
 }
+
+// 受控同步：父层把 modelValue 外部重置为 null（如弹窗重开 resetForm）时，清掉内部展示状态，
+// 避免"显示已选客户 A、提交却提示未选客户"的残留不一致。
+watch(
+  () => props.modelValue,
+  (value) => {
+    if (value == null) {
+      selectedLabel.value = ''
+      keyword.value = ''
+      options.value = []
+      open.value = false
+    }
+  },
+)
 </script>
 
 <template>

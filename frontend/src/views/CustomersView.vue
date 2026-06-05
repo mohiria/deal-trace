@@ -6,6 +6,7 @@ import { ApiError } from '../api/client'
 import { searchCustomers, createCustomer } from '../api/customers'
 import type { CustomerView } from '../api/customers'
 import CreateLeadModal from '../components/CreateLeadModal.vue'
+import { formatDateTime } from '../utils/datetime'
 
 /**
  * 客户管理（spec R1 / R2 / R4）：客户列表 / 搜索、创建客户、在选定客户下新建线索（含查重预检）。
@@ -24,7 +25,7 @@ let searchTimer: ReturnType<typeof setTimeout> | null = null
 const columns: TableColumnData[] = [
   { title: '客户名称', dataIndex: 'name' },
   { title: '统一社会信用代码', dataIndex: 'usci' },
-  { title: '创建时间', dataIndex: 'createdAt' },
+  { title: '创建时间', render: ({ record }) => formatDateTime((record as CustomerView).createdAt) },
 ]
 
 const pagedCustomers = computed(() => {

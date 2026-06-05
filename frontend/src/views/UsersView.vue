@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/auth'
 import { useAccountsStore } from '../stores/accounts'
 import { ApiError } from '../api/client'
 import type { AccountView } from '../api/accounts'
+import { formatDateTime } from '../utils/datetime'
 
 /**
  * 用户管理（spec：查看账号列表 / 创建 Sales / 启用停用）。仅 Admin 可达（路由 requiresAdmin + 后端 /admin/** 兜底）。
@@ -22,7 +23,7 @@ const columns: TableColumnData[] = [
   { title: '姓名', dataIndex: 'name' },
   { title: '角色', slotName: 'role' },
   { title: '状态', slotName: 'status' },
-  { title: '创建时间', dataIndex: 'createdAt' },
+  { title: '创建时间', render: ({ record }) => formatDateTime((record as AccountView).createdAt) },
   { title: '操作', slotName: 'actions' },
 ]
 
@@ -191,7 +192,7 @@ onMounted(() => {
           <a-input v-model="form.name" class="sales-name" placeholder="姓名（必填）" />
         </a-form-item>
         <a-form-item label="初始密码" required>
-          <a-input-password v-model="form.password" class="sales-password" placeholder="初始密码（必填）" />
+          <a-input-password v-model="form.password" class="sales-password" placeholder="初始密码（必填）" @copy.prevent @cut.prevent />
         </a-form-item>
       </a-form>
       <div class="users-modal-footer">

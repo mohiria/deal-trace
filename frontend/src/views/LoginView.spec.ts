@@ -97,3 +97,23 @@ describe('登录提交', () => {
     expect(wrapper.text()).toContain('账号已停用')
   })
 })
+
+describe('密码框防复制（禁复制 / 禁剪切、允许粘贴）', () => {
+  it('密码输入框 copy / cut 被阻止，paste 不受影响', async () => {
+    const { wrapper } = await mountLogin()
+    // LoginView 内第二个 input 为密码框（第一个为邮箱）。
+    const passwordInput = wrapper.findAll('input')[1]!.element
+
+    const copyEvt = new Event('copy', { bubbles: true, cancelable: true })
+    passwordInput.dispatchEvent(copyEvt)
+    expect(copyEvt.defaultPrevented).toBe(true)
+
+    const cutEvt = new Event('cut', { bubbles: true, cancelable: true })
+    passwordInput.dispatchEvent(cutEvt)
+    expect(cutEvt.defaultPrevented).toBe(true)
+
+    const pasteEvt = new Event('paste', { bubbles: true, cancelable: true })
+    passwordInput.dispatchEvent(pasteEvt)
+    expect(pasteEvt.defaultPrevented).toBe(false)
+  })
+})

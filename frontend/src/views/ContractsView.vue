@@ -7,6 +7,7 @@ import { fetchContracts } from '../api/contracts'
 import type { ContractRowView, ContractQuery } from '../api/contracts'
 import { useAuthStore } from '../stores/auth'
 import { useAccountsStore } from '../stores/accounts'
+import { formatDateTime } from '../utils/datetime'
 
 /**
  * 合同记录浏览（contract-view spec R1/R2）。ADMIN 全量、SALES 仅本人成交（后端依角色裁决）。
@@ -23,7 +24,7 @@ const columns: TableColumnData[] = [
   { title: '合同金额', slotName: 'amount', width: 160 },
   { title: '签订日期', dataIndex: 'signedDate', width: 130 },
   { title: '成交销售', dataIndex: 'dealSalesName', width: 140 },
-  { title: '赢单时间', dataIndex: 'createdAt', width: 180 },
+  { title: '赢单时间', width: 180, render: ({ record }) => formatDateTime((record as ContractRowView).createdAt) },
 ]
 
 const rows = ref<ContractRowView[]>([])

@@ -16,6 +16,7 @@ import {
   isClosed,
   isValidAmount,
 } from '../utils/lead'
+import { formatDateTime } from '../utils/datetime'
 
 /**
  * 线索详情面板（spec R3–R7 + 工作台内嵌线索工作区）：详情 + 倒序进度流 + 追加进度
@@ -342,11 +343,11 @@ onMounted(() => {
         </div>
         <div class="field">
           <span>最后跟踪</span>
-          <strong>{{ lead.lastTrackedAt ?? '尚未跟踪' }}</strong>
+          <strong>{{ formatDateTime(lead.lastTrackedAt, '尚未跟踪') }}</strong>
         </div>
         <div class="field">
           <span>创建时间</span>
-          <strong>{{ lead.createdAt ?? '—' }}</strong>
+          <strong>{{ formatDateTime(lead.createdAt) }}</strong>
         </div>
       </div>
     </section>
@@ -433,7 +434,7 @@ onMounted(() => {
           <div class="event-body">
             <strong>{{ p.method }} · {{ p.trackerName ?? '—' }}</strong>
             <p class="progress-item-content">{{ p.content }}</p>
-            <span>{{ p.trackTime }}</span>
+            <span>{{ formatDateTime(p.trackTime) }}</span>
           </div>
         </div>
       </div>
@@ -451,7 +452,7 @@ onMounted(() => {
           <div class="event-body">
             <strong>{{ s.actionLabel }} · {{ s.operatorName }}</strong>
             <p class="progress-item-content">{{ logSummary(s.detail, s.summaryFallback) }}</p>
-            <span>{{ s.createdAt }}</span>
+            <span>{{ formatDateTime(s.createdAt) }}</span>
           </div>
         </div>
       </div>
