@@ -7,6 +7,8 @@ import com.dealtrace.account.entity.Role;
 import com.dealtrace.account.repository.AccountMapper;
 import com.dealtrace.common.BusinessException;
 import com.dealtrace.common.ErrorCode;
+import com.dealtrace.common.PageQuery;
+import com.dealtrace.common.PageView;
 import com.dealtrace.customer.entity.Customer;
 import com.dealtrace.customer.repository.CustomerMapper;
 import com.dealtrace.lead.dto.PoolLeadView;
@@ -39,7 +41,6 @@ import java.util.stream.Collectors;
 @Service
 public class LeadOwnershipService {
 
-    private static final int POOL_LIMIT = 50;
     private static final String POOL_LABEL = "公海";
 
     private final LeadMapper leadMapper;
@@ -57,23 +58,49 @@ public class LeadOwnershipService {
         this.systemLogPort = systemLogPort;
     }
 
-    /** GET /api/leads/pool：公海未结束线索；SALES 电话脱敏、ADMIN 明文（design D7）。 */
-    public List<PoolLeadView> listPool(AccountPrincipal principal) {
-        List<Lead> rows = leadMapper.selectList(new QueryWrapper<Lead>()
+    /** GET /api/leads/pool：公海未结束线索；服务端分页 + keyword 全表（客户名/USCI、联系人，不含电话）；SALES 脱敏、ADMIN 明文（design D7）。 */
+    @Transactional(readOnly = true)
+    public PageView<PoolLeadView> listPool(AccountPrincipal principal, PageQuery query) {
+        QueryWrapper<Lead> qw = new QueryWrapper<Lead>()
             .isNull("owner_sales_id")
-            .notIn("stage", LeadStage.WON.getDbValue(), LeadStage.LOST.getDbValue())
-            .orderByDesc("created_at")
-            .last("LIMIT " + POOL_LIMIT));
+            .notIn("stage", LeadStage.WON.getDbValue(), LeadStage.LOST.getDbValue());
+        if (query.hasKeyword()) {
+            applyKeyword(qw, query.keyword());
+        }
+        Long total = leadMapper.selectCount(qw);
+
+        qw.orderByDesc("created_at").orderByDesc("id");
+        qw.last("LIMIT " + query.size() + " OFFSET " + query.offset());
+        List<Lead> rows = leadMapper.selectList(qw);
+
         Map<Long, Customer> customers = loadCustomers(rows);
         Map<Long, Set<String>> nonLostTypesByCustomer = loadNonLostBusinessTypes(rows);
         boolean admin = principal.role() == Role.ADMIN;
-        return rows.stream()
+        List<PoolLeadView> items = rows.stream()
             .map(l -> {
                 String phone = admin ? l.getContactPhone() : PhoneMasker.mask(l.getContactPhone());
                 boolean hasOther = customerHasOtherType(nonLostTypesByCustomer, l);
                 return PoolLeadView.of(l, customers.get(l.getCustomerId()), phone, hasOther);
             })
             .toList();
+        return PageView.of(items, total == null ? 0 : total, query.page(), query.size());
+    }
+
+    /**
+     * keyword 跨表匹配：关联客户名/USCI 或本表联系人（**不**含 contact_phone，避免脱敏/明文口径泄漏）。
+     * 参数化两步（先查匹配 customerId 再 IN），避免 inSql 拼接用户输入。
+     */
+    private void applyKeyword(QueryWrapper<Lead> qw, String k) {
+        List<Long> customerIds = customerMapper.selectList(
+                new QueryWrapper<Customer>().select("id")
+                    .and(w -> w.like("name", k).or().like("usci", k)))
+            .stream().map(Customer::getId).toList();
+        qw.and(w -> {
+            w.like("contact_name", k);
+            if (!customerIds.isEmpty()) {
+                w.or().in("customer_id", customerIds);
+            }
+        });
     }
 
     /** Sales 认领公海线索；并发下行锁保证仅一人成功（spec ADDED 认领 / design D1-D2）。 */

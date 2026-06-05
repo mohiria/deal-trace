@@ -1,6 +1,8 @@
 package com.dealtrace.customer;
 
 import com.dealtrace.common.ApiResponse;
+import com.dealtrace.common.PageQuery;
+import com.dealtrace.common.PageView;
 import com.dealtrace.customer.dto.CreateCustomerRequest;
 import com.dealtrace.customer.dto.CustomerView;
 import com.dealtrace.customer.entity.Customer;
@@ -40,10 +42,13 @@ public class CustomerController {
     }
 
     @GetMapping
-    public ApiResponse<List<CustomerView>> search(
+    public ApiResponse<PageView<CustomerView>> search(
             @AuthenticationPrincipal AccountPrincipal principal,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
             @RequestParam(required = false) String keyword) {
-        List<Customer> rows = customerService.search(keyword);
-        return ApiResponse.ok(rows.stream().map(CustomerView::from).toList());
+        PageView<Customer> result = customerService.search(PageQuery.of(page, size, keyword));
+        List<CustomerView> items = result.items().stream().map(CustomerView::from).toList();
+        return ApiResponse.ok(PageView.of(items, result.total(), result.page(), result.size()));
     }
 }

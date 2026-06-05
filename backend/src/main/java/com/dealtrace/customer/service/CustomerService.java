@@ -3,6 +3,8 @@ package com.dealtrace.customer.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.dealtrace.common.BusinessException;
 import com.dealtrace.common.ErrorCode;
+import com.dealtrace.common.PageQuery;
+import com.dealtrace.common.PageView;
 import com.dealtrace.customer.dto.CreateCustomerRequest;
 import com.dealtrace.customer.entity.Customer;
 import com.dealtrace.customer.repository.CustomerMapper;
@@ -26,12 +28,11 @@ import java.util.List;
  *   <li>INSERT；catch DuplicateKeyException 翻译为 DUPLICATE_CUSTOMER（并发竞态兜底）</li>
  * </ol>
  *
- * <p>search 按 design D2：keyword 空 → 最近 50 行；keyword 非空 → name OR usci 子串。
+ * <p>search 改服务端分页（spec「客户搜索 / 列表统一端点」MODIFIED）：keyword 对全表
+ * name OR usci 子串匹配后按 created_at 倒序切页，返回 {@code { items, total, page, size }}。
  */
 @Service
 public class CustomerService {
-
-    private static final int SEARCH_LIMIT = 50;
 
     private final CustomerMapper customerMapper;
 
@@ -80,16 +81,21 @@ public class CustomerService {
         return c;
     }
 
-    public List<Customer> search(String keyword) {
-        String k = keyword == null ? "" : keyword.strip();
-        QueryWrapper<Customer> q = new QueryWrapper<Customer>().orderByDesc("created_at").last("LIMIT " + SEARCH_LIMIT);
-        if (k.isEmpty()) {
-            return customerMapper.selectList(q);
+    /** 服务端分页搜索：keyword 非空 → name OR usci 全表子串匹配；按 created_at 倒序切页 + count。 */
+    @Transactional(readOnly = true)
+    public PageView<Customer> search(PageQuery query) {
+        QueryWrapper<Customer> qw = new QueryWrapper<>();
+        if (query.hasKeyword()) {
+            String k = query.keyword();
+            qw.and(w -> w.like("name", k).or().like("usci", k));
         }
-        // name LIKE %k% OR usci LIKE %k%
-        return customerMapper.selectList(
-            q.and(w -> w.like("name", k).or().like("usci", k))
-        );
+        Long total = customerMapper.selectCount(qw);
+
+        qw.orderByDesc("created_at").orderByDesc("id");
+        qw.last("LIMIT " + query.size() + " OFFSET " + query.offset());
+        List<Customer> rows = customerMapper.selectList(qw);
+
+        return PageView.of(rows, total == null ? 0 : total, query.page(), query.size());
     }
 
     private BusinessException translateDuplicateKey(DuplicateKeyException ex) {

@@ -107,9 +107,10 @@ class LeadPoolListTest extends IntegrationTest {
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.code").value("SUCCESS"))
-            .andExpect(jsonPath("$.data.length()").value(1))
-            .andExpect(jsonPath("$.data[0].id").value(poolUntouchedId))
-            .andExpect(jsonPath("$.data[0].contactPhone").value("138****5678"))
+            .andExpect(jsonPath("$.data.items.length()").value(1))
+            .andExpect(jsonPath("$.data.total").value(1))
+            .andExpect(jsonPath("$.data.items[0].id").value(poolUntouchedId))
+            .andExpect(jsonPath("$.data.items[0].contactPhone").value("138****5678"))
             .andReturn();
         assertThat(result.getResponse().getContentAsString()).doesNotContain(POOL_PHONE);
     }
@@ -120,8 +121,8 @@ class LeadPoolListTest extends IntegrationTest {
         mockMvc.perform(get("/leads/pool")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.length()").value(1))
-            .andExpect(jsonPath("$.data[0].contactPhone").value(POOL_PHONE));
+            .andExpect(jsonPath("$.data.items.length()").value(1))
+            .andExpect(jsonPath("$.data.items[0].contactPhone").value(POOL_PHONE));
     }
 
     @Test
@@ -130,8 +131,36 @@ class LeadPoolListTest extends IntegrationTest {
         mockMvc.perform(get("/leads/pool")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.length()").value(1))
-            .andExpect(jsonPath("$.data[0].id").value(poolUntouchedId));
+            .andExpect(jsonPath("$.data.items.length()").value(1))
+            .andExpect(jsonPath("$.data.total").value(1))
+            .andExpect(jsonPath("$.data.items[0].id").value(poolUntouchedId));
+    }
+
+    @Test
+    void pool_keywordMatchesCustomerName() throws Exception {
+        Customer special = new Customer();
+        special.setName("星河设计院");
+        special.setUsci("911100000000000018");
+        special.setCreatedAt(LocalDateTime.now());
+        customerMapper.insert(special);
+        Lead l = new Lead();
+        l.setCustomerId(special.getId());
+        l.setBusinessYear((short) LocalDate.now().getYear());
+        l.setBusinessType(BusinessType.BIM_CONSULTING);
+        l.setContactName("X");
+        l.setContactPhone(POOL_PHONE);
+        l.setOwnerSalesId(null);
+        l.setStage(LeadStage.UNTOUCHED);
+        l.setCreatedAt(LocalDateTime.now());
+        leadMapper.insert(l);
+
+        String token = jwtService.generateToken(admin);
+        mockMvc.perform(get("/leads/pool").param("keyword", "星河")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.total").value(1))
+            .andExpect(jsonPath("$.data.items.length()").value(1))
+            .andExpect(jsonPath("$.data.items[0].customerName").value("星河设计院"));
     }
 
     @Test

@@ -115,7 +115,7 @@ class LeadPoolOtherLeadsHintTest extends IntegrationTest {
         String token = jwtService.generateToken(salesA);
         mockMvc.perform(get("/leads/pool").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data[?(@.id == " + poolWithOtherId + ")].customerHasOtherLeads")
+            .andExpect(jsonPath("$.data.items[?(@.id == " + poolWithOtherId + ")].customerHasOtherLeads")
                 .value(contains(true)));
     }
 
@@ -124,7 +124,7 @@ class LeadPoolOtherLeadsHintTest extends IntegrationTest {
         String token = jwtService.generateToken(salesA);
         mockMvc.perform(get("/leads/pool").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data[?(@.id == " + poolNoOtherId + ")].customerHasOtherLeads")
+            .andExpect(jsonPath("$.data.items[?(@.id == " + poolNoOtherId + ")].customerHasOtherLeads")
                 .value(contains(false)));
     }
 

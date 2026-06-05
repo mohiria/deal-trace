@@ -3,6 +3,8 @@ package com.dealtrace.lead;
 import com.dealtrace.common.ApiResponse;
 import com.dealtrace.common.BusinessException;
 import com.dealtrace.common.ErrorCode;
+import com.dealtrace.common.PageQuery;
+import com.dealtrace.common.PageView;
 import com.dealtrace.customer.entity.Customer;
 import com.dealtrace.customer.repository.CustomerMapper;
 import com.dealtrace.lead.dto.AssignLeadRequest;
@@ -124,16 +126,24 @@ public class LeadController {
     }
 
     @GetMapping("/mine")
-    public ApiResponse<List<LeadView>> mine(@AuthenticationPrincipal AccountPrincipal principal) {
-        List<Lead> rows = leadService.myLeads(principal);
-        return ApiResponse.ok(toViews(rows));
+    public ApiResponse<PageView<LeadView>> mine(
+            @AuthenticationPrincipal AccountPrincipal principal,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String keyword) {
+        PageView<Lead> result = leadService.myLeads(principal, PageQuery.of(page, size, keyword));
+        return ApiResponse.ok(toPageView(result));
     }
 
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ApiResponse<List<LeadView>> listAll(@AuthenticationPrincipal AccountPrincipal principal) {
-        List<Lead> rows = leadService.allLeads();
-        return ApiResponse.ok(toViews(rows));
+    public ApiResponse<PageView<LeadView>> listAll(
+            @AuthenticationPrincipal AccountPrincipal principal,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String keyword) {
+        PageView<Lead> result = leadService.allLeads(PageQuery.of(page, size, keyword));
+        return ApiResponse.ok(toPageView(result));
     }
 
     @GetMapping("/{id}")
@@ -148,8 +158,12 @@ public class LeadController {
     // ---- lead-ownership：公海列表 + 5 个归属写动作 ----
 
     @GetMapping("/pool")
-    public ApiResponse<List<PoolLeadView>> pool(@AuthenticationPrincipal AccountPrincipal principal) {
-        return ApiResponse.ok(ownershipService.listPool(principal));
+    public ApiResponse<PageView<PoolLeadView>> pool(
+            @AuthenticationPrincipal AccountPrincipal principal,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String keyword) {
+        return ApiResponse.ok(ownershipService.listPool(principal, PageQuery.of(page, size, keyword)));
     }
 
     @PostMapping("/{id}/claim")
@@ -271,5 +285,9 @@ public class LeadController {
         return rows.stream()
             .map(l -> LeadView.of(l, customers.get(l.getCustomerId()), ownerNames.get(l.getOwnerSalesId())))
             .toList();
+    }
+
+    private PageView<LeadView> toPageView(PageView<Lead> page) {
+        return PageView.of(toViews(page.items()), page.total(), page.page(), page.size());
     }
 }

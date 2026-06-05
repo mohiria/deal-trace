@@ -138,7 +138,7 @@ class LeadControllerDetailListTest extends IntegrationTest {
         mockMvc.perform(get("/leads/mine")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data[0].ownerSalesName").value("Sales A"));
+            .andExpect(jsonPath("$.data.items[0].ownerSalesName").value("Sales A"));
     }
 
     @Test
@@ -185,8 +185,9 @@ class LeadControllerDetailListTest extends IntegrationTest {
         mockMvc.perform(get("/leads/mine")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.length()").value(1))
-            .andExpect(jsonPath("$.data[0].id").value(leadOfAId));
+            .andExpect(jsonPath("$.data.items.length()").value(1))
+            .andExpect(jsonPath("$.data.total").value(1))
+            .andExpect(jsonPath("$.data.items[0].id").value(leadOfAId));
     }
 
     @Test
@@ -195,7 +196,8 @@ class LeadControllerDetailListTest extends IntegrationTest {
         mockMvc.perform(get("/leads")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.length()").value(3));
+            .andExpect(jsonPath("$.data.items.length()").value(3))
+            .andExpect(jsonPath("$.data.total").value(3));
     }
 
     @Test

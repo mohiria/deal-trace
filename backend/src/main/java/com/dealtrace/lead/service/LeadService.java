@@ -7,6 +7,8 @@ import com.dealtrace.account.entity.Role;
 import com.dealtrace.account.repository.AccountMapper;
 import com.dealtrace.common.BusinessException;
 import com.dealtrace.common.ErrorCode;
+import com.dealtrace.common.PageQuery;
+import com.dealtrace.common.PageView;
 import com.dealtrace.customer.entity.Customer;
 import com.dealtrace.customer.repository.CustomerMapper;
 import com.dealtrace.lead.dto.CreateLeadRequest;
@@ -45,8 +47,6 @@ import java.util.stream.Collectors;
  */
 @Service
 public class LeadService {
-
-    private static final int SEARCH_LIMIT = 50;
 
     private final LeadMapper leadMapper;
     private final CustomerMapper customerMapper;
@@ -166,19 +166,47 @@ public class LeadService {
         return lead;
     }
 
-    /** GET /api/leads/mine：当前用户名下；按 created_at desc + LIMIT 50。 */
-    public List<Lead> myLeads(AccountPrincipal principal) {
-        return leadMapper.selectList(new QueryWrapper<Lead>()
-            .eq("owner_sales_id", principal.id())
-            .orderByDesc("created_at")
-            .last("LIMIT " + SEARCH_LIMIT));
+    /** GET /api/leads/mine：当前用户名下；服务端分页 + keyword 全表（join customer 名/USCI、联系人）。 */
+    @Transactional(readOnly = true)
+    public PageView<Lead> myLeads(AccountPrincipal principal, PageQuery query) {
+        return pagedLeads(new QueryWrapper<Lead>().eq("owner_sales_id", principal.id()), query);
     }
 
-    /** GET /api/leads：Admin 全局；按 created_at desc + LIMIT 50。 */
-    public List<Lead> allLeads() {
-        return leadMapper.selectList(new QueryWrapper<Lead>()
-            .orderByDesc("created_at")
-            .last("LIMIT " + SEARCH_LIMIT));
+    /** GET /api/leads：Admin 全局；服务端分页 + keyword 全表。 */
+    @Transactional(readOnly = true)
+    public PageView<Lead> allLeads(PageQuery query) {
+        return pagedLeads(new QueryWrapper<>(), query);
+    }
+
+    /** 在给定基础条件上叠加 keyword 过滤 + count + 倒序切页。 */
+    private PageView<Lead> pagedLeads(QueryWrapper<Lead> base, PageQuery query) {
+        if (query.hasKeyword()) {
+            applyKeyword(base, query.keyword());
+        }
+        Long total = leadMapper.selectCount(base);
+
+        base.orderByDesc("created_at").orderByDesc("id");
+        base.last("LIMIT " + query.size() + " OFFSET " + query.offset());
+        List<Lead> rows = leadMapper.selectList(base);
+
+        return PageView.of(rows, total == null ? 0 : total, query.page(), query.size());
+    }
+
+    /**
+     * keyword 跨表匹配：关联客户名/USCI 或本表联系人（**不**含 contact_phone，避免脱敏口径泄漏）。
+     * 参数化两步（先查匹配 customerId 再 IN），避免 inSql 拼接用户输入的注入风险。
+     */
+    private void applyKeyword(QueryWrapper<Lead> qw, String k) {
+        List<Long> customerIds = customerMapper.selectList(
+                new QueryWrapper<Customer>().select("id")
+                    .and(w -> w.like("name", k).or().like("usci", k)))
+            .stream().map(Customer::getId).toList();
+        qw.and(w -> {
+            w.like("contact_name", k);
+            if (!customerIds.isEmpty()) {
+                w.or().in("customer_id", customerIds);
+            }
+        });
     }
 
     /** 配合详情 / 列表的 customerName / USCI 内联。 */
