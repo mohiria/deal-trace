@@ -55,7 +55,7 @@ describe('客户可搜索下拉（spec R3）', () => {
     expect(selectEvt.name).toBe(SAMPLE_CUSTOMER.name)
   })
 
-  it('无匹配时不提供"以关键词新建客户"的捷径', async () => {
+  it('候选为空时提供"录入新客户"入口（本 change MODIFIED：反转旧"仅选既有"决策）', async () => {
     server.use(customerSearch([], []))
     const wrapper = mountSelect()
 
@@ -64,8 +64,45 @@ describe('客户可搜索下拉（spec R3）', () => {
     await flushPromises()
 
     expect(wrapper.findAll('.cs-option')).toHaveLength(0)
-    expect(wrapper.html()).not.toContain('新建客户')
-    expect(wrapper.find('.cs-create-shortcut').exists()).toBe(false)
+    expect(wrapper.find('.cs-create-new').exists()).toBe(true)
+    expect(wrapper.find('.cs-create-new').text()).toContain('不存在xyz')
+  })
+
+  it('点击录入入口后出现名称+USCI 录入框，输入即 emit update:newCustomer（不在前端复算校验）', async () => {
+    server.use(customerSearch([], []))
+    const wrapper = mountSelect()
+
+    await wrapper.find('.cs-search').setValue('星河设计院')
+    await tick()
+    await flushPromises()
+    await wrapper.find('.cs-create-new').trigger('click')
+
+    // 进入录入态：名称以关键词预填，USCI 留空；既有客户选择被清空
+    expect(wrapper.find('.cs-new-name').exists()).toBe(true)
+    expect(wrapper.find('.cs-new-usci').exists()).toBe(true)
+    const lastModel = wrapper.emitted('update:modelValue')?.at(-1)
+    expect(lastModel).toEqual([null])
+
+    await wrapper.find('.cs-new-usci').setValue('91310000MA1234567N')
+    const lastNew = wrapper.emitted('update:newCustomer')?.at(-1)?.[0]
+    expect(lastNew).toEqual({ name: '星河设计院', usci: '91310000MA1234567N' })
+  })
+
+  it('父层把 newCustomer 重置为 null 时退出录入态回到搜索框', async () => {
+    server.use(customerSearch([], []))
+    const wrapper = mountSelect()
+
+    await wrapper.find('.cs-search').setValue('星河')
+    await tick()
+    await flushPromises()
+    await wrapper.find('.cs-create-new').trigger('click')
+    expect(wrapper.find('.cs-new-name').exists()).toBe(true)
+    // 模拟父层 v-model:newCustomer 回填录入态的非空值（choose/enterNewMode 后父更新 prop）
+    await wrapper.setProps({ newCustomer: { name: '星河', usci: '' } })
+
+    await wrapper.setProps({ newCustomer: null })
+    expect(wrapper.find('.cs-new-name').exists()).toBe(false)
+    expect(wrapper.find('.cs-search').exists()).toBe(true)
   })
 
   it('父层把 modelValue 外部重置为 null 时清掉已选残留（修复跨次打开"显示已选 A 却提示未选"）', async () => {

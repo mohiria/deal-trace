@@ -146,6 +146,16 @@ public class LeadController {
         return ApiResponse.ok(toPageView(result));
     }
 
+    /**
+     * 我的长期未跟踪线索（spec ADDED：我的长期未跟踪线索查询）。供工作台今日提醒下推；
+     * 调用者名下、未结束、超阈值（或从未跟踪）的线索，升序取前 N，无持久化副作用。
+     */
+    @GetMapping("/mine/stale")
+    public ApiResponse<List<LeadView>> mineStale(
+            @AuthenticationPrincipal AccountPrincipal principal) {
+        return ApiResponse.ok(toViews(leadService.staleOwned(principal)));
+    }
+
     @GetMapping("/{id}")
     public ApiResponse<LeadView> detail(
             @AuthenticationPrincipal AccountPrincipal principal,
@@ -282,8 +292,13 @@ public class LeadController {
     private List<LeadView> toViews(List<Lead> rows) {
         Map<Long, Customer> customers = leadService.loadCustomers(rows);
         Map<Long, String> ownerNames = leadService.loadOwnerNames(rows);
+        // 公海线索 ownerSalesId 为 null；不可变空映射（Map.of()）对 null 键 get 会抛 NPE，
+        // 故显式跳过 null 键查找（整页皆公海时 ownerNames 为空映射）。
         return rows.stream()
-            .map(l -> LeadView.of(l, customers.get(l.getCustomerId()), ownerNames.get(l.getOwnerSalesId())))
+            .map(l -> LeadView.of(
+                l,
+                l.getCustomerId() == null ? null : customers.get(l.getCustomerId()),
+                l.getOwnerSalesId() == null ? null : ownerNames.get(l.getOwnerSalesId())))
             .toList();
     }
 

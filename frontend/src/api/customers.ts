@@ -1,4 +1,6 @@
 import { apiClient } from './client'
+import type { PageQuery, PageResult } from './pagination'
+import { pageParams } from './pagination'
 
 /**
  * 客户 API 封装（design D1）。视图不直接调 `apiClient`，统一经本层。
@@ -15,14 +17,13 @@ export interface CustomerView {
 }
 
 /**
- * 客户搜索 / 列表（`GET /customers`，所有已认证用户）。
- * 无关键词（或空白）时不带 `keyword` query，等价"最近列表"；
- * 否则按客户名称 / USCI 子串匹配（上限 50 由后端裁决）。
+ * 客户搜索 / 列表（`GET /customers`，所有已认证用户）。服务端分页：
+ * 返回 `{ items, total, page, size }`；keyword 由后端对全表 name/usci 子串匹配后分页。
  */
-export function searchCustomers(keyword?: string): Promise<CustomerView[]> {
-  const trimmed = keyword?.trim()
-  const params = trimmed ? { keyword: trimmed } : undefined
-  return apiClient.get<CustomerView[], CustomerView[]>('/customers', { params })
+export function searchCustomers(query: PageQuery = {}): Promise<PageResult<CustomerView>> {
+  return apiClient.get<PageResult<CustomerView>, PageResult<CustomerView>>('/customers', {
+    params: pageParams(query),
+  })
 }
 
 /**

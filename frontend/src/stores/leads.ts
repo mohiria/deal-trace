@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { LeadView, PoolLeadView, ProgressLogView } from '../api/leads'
+import type { PageQuery } from '../api/pagination'
 import type { SystemLogView } from '../api/systemLogs'
 import { fetchLeadLogs } from '../api/systemLogs'
 import {
@@ -13,6 +14,7 @@ import {
   fetchMyLeads,
   fetchPool,
   fetchProgress,
+  fetchStaleLeads,
   loseLead as apiLoseLead,
   recallLead as apiRecallLead,
   releaseLead as apiReleaseLead,
@@ -26,43 +28,59 @@ import {
  * 视图保持薄，写动作把 ApiError 透传给调用方按 code 分支（design D5），不在此吞掉。
  */
 export const useLeadsStore = defineStore('leads', () => {
+  // 列表持当前页 items + 服务端 total（分页由后端裁决）。
   const myLeads = ref<LeadView[]>([])
+  const myLeadsTotal = ref(0)
   const allLeads = ref<LeadView[]>([])
+  const allLeadsTotal = ref(0)
   const pool = ref<PoolLeadView[]>([])
+  const poolTotal = ref(0)
+  const staleLeads = ref<LeadView[]>([])
   const currentLead = ref<LeadView | null>(null)
   const progress = ref<ProgressLogView[]>([])
   const systemLog = ref<SystemLogView[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  async function loadMyLeads() {
+  async function loadMyLeads(query: PageQuery = {}) {
     loading.value = true
     error.value = null
     try {
-      myLeads.value = await fetchMyLeads()
+      const res = await fetchMyLeads(query)
+      myLeads.value = res.items
+      myLeadsTotal.value = res.total
     } finally {
       loading.value = false
     }
   }
 
-  async function loadAllLeads() {
+  async function loadAllLeads(query: PageQuery = {}) {
     loading.value = true
     error.value = null
     try {
-      allLeads.value = await fetchAllLeads()
+      const res = await fetchAllLeads(query)
+      allLeads.value = res.items
+      allLeadsTotal.value = res.total
     } finally {
       loading.value = false
     }
   }
 
-  async function loadPool() {
+  async function loadPool(query: PageQuery = {}) {
     loading.value = true
     error.value = null
     try {
-      pool.value = await fetchPool()
+      const res = await fetchPool(query)
+      pool.value = res.items
+      poolTotal.value = res.total
     } finally {
       loading.value = false
     }
+  }
+
+  /** 工作台今日提醒：我的长期未跟踪线索（后端阈值裁决，前端不重算）。 */
+  async function loadStaleLeads() {
+    staleLeads.value = await fetchStaleLeads()
   }
 
   async function loadLead(id: number) {
@@ -197,8 +215,12 @@ export const useLeadsStore = defineStore('leads', () => {
 
   return {
     myLeads,
+    myLeadsTotal,
     allLeads,
+    allLeadsTotal,
     pool,
+    poolTotal,
+    staleLeads,
     currentLead,
     progress,
     systemLog,
@@ -207,6 +229,7 @@ export const useLeadsStore = defineStore('leads', () => {
     loadMyLeads,
     loadAllLeads,
     loadPool,
+    loadStaleLeads,
     loadLead,
     setCurrentFromPool,
     loadProgress,

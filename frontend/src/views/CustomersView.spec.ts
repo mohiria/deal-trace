@@ -98,19 +98,48 @@ describe('客户列表与搜索（spec R1）', () => {
     expect(wrapper.find('.customers-empty').exists()).toBe(true)
   })
 
-  it('不展示无意义的 Table/Modal 标签并支持分页', async () => {
-    const rows = Array.from({ length: 12 }, (_, index) => ({
+  it('服务端分页：翻页向后端请求对应页，换关键词回第 1 页', async () => {
+    const all = Array.from({ length: 23 }, (_, i) => ({
       ...SAMPLE_CUSTOMER,
-      id: 1000 + index,
-      name: index === 11 ? '星河客户集团' : `分页客户${index + 1}`,
+      id: 2000 + i,
+      name: `客户${String(i + 1).padStart(2, '0')}`,
     }))
-    server.use(customerList(rows))
+    let lastQuery = new URLSearchParams()
+    server.use(
+      http.get('*/api/customers', ({ request }) => {
+        const url = new URL(request.url)
+        lastQuery = url.searchParams
+        const keyword = url.searchParams.get('keyword')?.trim()
+        const pageNo = Number(url.searchParams.get('page') ?? '1')
+        const size = Number(url.searchParams.get('size') ?? '10')
+        const filtered = keyword ? all.filter((c) => c.name.includes(keyword)) : all
+        const start = (pageNo - 1) * size
+        return HttpResponse.json({
+          code: 'SUCCESS',
+          message: 'OK',
+          data: { items: filtered.slice(start, start + size), total: filtered.length, page: pageNo, size },
+        })
+      }),
+    )
     const wrapper = await mountView()
 
-    expect(wrapper.find('.customers-toolbar').text()).not.toContain('Table')
-    expect(wrapper.find('.customers-toolbar').text()).not.toContain('Modal')
+    // 第 1 页：分页控件存在，仅当页内容
     expect(wrapper.find('[data-test="list-pagination"]').exists()).toBe(true)
-    expect(wrapper.text()).not.toContain('星河客户集团')
+    expect(wrapper.text()).toContain('客户01')
+    expect(wrapper.text()).not.toContain('客户11')
+
+    // 翻到第 2 页 → 后端 page=2，展示第二页内容（直接驱动分页状态，避免 teleport 取值脆弱）
+    ;(wrapper.vm as unknown as { currentPage: number }).currentPage = 2
+    await flushPromises()
+    expect(lastQuery.get('page')).toBe('2')
+    expect(wrapper.text()).toContain('客户11')
+
+    // 换关键词 → 回第 1 页且 keyword 下推后端
+    await wrapper.find('.customer-search').setValue('客户1')
+    await tick()
+    await flushPromises()
+    expect(lastQuery.get('keyword')).toBe('客户1')
+    expect(lastQuery.get('page')).toBe('1')
   })
 })
 

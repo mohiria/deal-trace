@@ -39,6 +39,16 @@ export function success<T>(data: T): ApiEnvelope<T> {
   return { code: 'SUCCESS', message: 'OK', data }
 }
 
+/** 分页信封 `{ items, total, page, size }`（镜像后端 `PageView<T>`）。total 默认取 items 长度。 */
+export function page<T>(items: T[], total = items.length, p = 1, size = 20): ApiEnvelope<{
+  items: T[]
+  total: number
+  page: number
+  size: number
+}> {
+  return success({ items, total, page: p, size })
+}
+
 function failure(code: string, message: string): ApiEnvelope<null> {
   return { code, message, data: null }
 }
@@ -129,20 +139,25 @@ export const SAMPLE_PROGRESS: ProgressLogView = {
   trackTime: '2026-05-02T10:30:00',
 }
 
-export function mineLeads(rows: LeadView[] = [SAMPLE_LEAD]) {
-  return http.get('*/api/leads/mine', () => HttpResponse.json(success(rows)))
+export function mineLeads(rows: LeadView[] = [SAMPLE_LEAD], total = rows.length) {
+  return http.get('*/api/leads/mine', () => HttpResponse.json(page(rows, total)))
 }
 
-export function allLeads(rows: LeadView[] = [SAMPLE_LEAD]) {
-  return http.get('*/api/leads', () => HttpResponse.json(success(rows)))
+/** GET /leads/mine/stale：我的长期未跟踪线索（裸数组，非分页信封）。 */
+export function staleLeads(rows: LeadView[] = []) {
+  return http.get('*/api/leads/mine/stale', () => HttpResponse.json(success(rows)))
+}
+
+export function allLeads(rows: LeadView[] = [SAMPLE_LEAD], total = rows.length) {
+  return http.get('*/api/leads', () => HttpResponse.json(page(rows, total)))
 }
 
 export function leadDetail(lead: LeadView = SAMPLE_LEAD) {
   return http.get('*/api/leads/:id', () => HttpResponse.json(success(lead)))
 }
 
-export function poolList(rows: PoolLeadView[] = [SAMPLE_POOL_LEAD]) {
-  return http.get('*/api/leads/pool', () => HttpResponse.json(success(rows)))
+export function poolList(rows: PoolLeadView[] = [SAMPLE_POOL_LEAD], total = rows.length) {
+  return http.get('*/api/leads/pool', () => HttpResponse.json(page(rows, total)))
 }
 
 export function claimSuccess(lead: LeadView = { ...SAMPLE_LEAD, id: 200, ownerSalesId: 2, contactPhone: '13912344321' }) {
@@ -212,8 +227,8 @@ export const SAMPLE_CUSTOMER: CustomerView = {
 }
 
 /** 无关键词列表：始终返回给定行（默认一条）。 */
-export function customerList(rows: CustomerView[] = [SAMPLE_CUSTOMER]) {
-  return http.get('*/api/customers', () => HttpResponse.json(success(rows)))
+export function customerList(rows: CustomerView[] = [SAMPLE_CUSTOMER], total = rows.length) {
+  return http.get('*/api/customers', () => HttpResponse.json(page(rows, total)))
 }
 
 /**
@@ -224,7 +239,7 @@ export function customerSearch(rows: CustomerView[] = [SAMPLE_CUSTOMER], listRow
   return http.get('*/api/customers', ({ request }) => {
     const keyword = new URL(request.url).searchParams.get('keyword')
     const hit = keyword && keyword.trim() !== '' ? rows : listRows
-    return HttpResponse.json(success(hit))
+    return HttpResponse.json(page(hit))
   })
 }
 
@@ -381,4 +396,4 @@ export function ownershipForbidden(path: string, message = '无权执行该操�
 }
 
 /** 默认 handler 集：登录成功 + me 成功（Admin）+ 客户其他业务线索默认空（避免 onUnhandledRequest 报错）。 */
-export const handlers = [loginSuccess(), meSuccess(), systemLogList(), leadCustomerOtherLeads()]
+export const handlers = [loginSuccess(), meSuccess(), systemLogList(), leadCustomerOtherLeads(), staleLeads()]

@@ -62,13 +62,13 @@ test('新建客户 → 搜索 → 选择器选中 → 新建线索 → 我的线
 
   // 新建线索：经可搜索选择器选中该客户
   await page.locator('.create-lead-open').click()
-  await page.locator('.cs-search').fill(customerName)
-  await page.locator('.cs-option').first().click()
+  await page.locator('.cs-search:visible').fill(customerName)
+  await page.locator('.cs-option:visible').first().click()
   // 业务类型 + 联系人 + 电话
-  await page.locator('.lead-type').getByText('BIM咨询').click()
-  await page.locator('.lead-contact-name input').fill('王工')
-  await page.locator('.lead-contact-phone input').fill('13812345678')
-  await page.locator('.lead-confirm').click()
+  await page.locator('.lead-type:visible').getByText('BIM咨询').click()
+  await page.locator('.lead-contact-name:visible input').fill('王工')
+  await page.locator('.lead-contact-phone:visible input').fill('13812345678')
+  await page.locator('.lead-confirm:visible').click()
   await expect(page.getByText('线索创建成功')).toBeVisible()
 
   // 我的线索可见（Sales 默认归己）

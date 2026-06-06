@@ -17,6 +17,7 @@ import {
   allLeads,
   mineLeads,
   poolList,
+  staleLeads,
   leadDetail,
   progressList,
   claimSuccess,
@@ -59,15 +60,25 @@ interface MountOpts {
   mine?: LeadView[]
   all?: LeadView[]
   pool?: PoolLeadView[]
+  stale?: LeadView[]
+  debounceMs?: number
 }
 
 async function mountView(opts: MountOpts = {}): Promise<{ wrapper: VueWrapper; router: Router }> {
-  server.use(mineLeads(opts.mine ?? []), allLeads(opts.all ?? []), poolList(opts.pool ?? []))
+  server.use(
+    mineLeads(opts.mine ?? []),
+    allLeads(opts.all ?? []),
+    poolList(opts.pool ?? []),
+    staleLeads(opts.stale ?? []),
+  )
   useAuthStore().currentUser = opts.admin ? ADMIN_USER : SALES_USER
   const router = buildRouter()
   await router.push('/')
   await router.isReady()
-  const wrapper = mount(DashboardView, { global: { plugins: [router, ArcoVue] } })
+  const wrapper = mount(DashboardView, {
+    props: { debounceMs: opts.debounceMs ?? 0 },
+    global: { plugins: [router, ArcoVue] },
+  })
   return { wrapper, router }
 }
 
@@ -196,37 +207,53 @@ describe('三 Tab 线索工作区', () => {
     expect(warnSpy.mock.calls.some((c) => String(c[0]).includes('已被认领'))).toBe(true)
   })
 
-  it('全部线索 Tab 不再按本月结束过滤', async () => {
-    const now = new Date()
-    const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-10T09:00:00`
-    const won: LeadView = { ...SAMPLE_LEAD, id: 401, customerName: '本月赢单客户', stage: '已赢单', wonAt: current }
-    const lost: LeadView = { ...SAMPLE_LEAD, id: 402, customerName: '本月流失客户', stage: '已流失', lostAt: current }
-    const old: LeadView = { ...SAMPLE_LEAD, id: 403, customerName: '历史结束客户', stage: '已赢单', wonAt: '2025-01-01T09:00:00' }
+  it('ADMIN 归属 Tab 标签为「全部线索」，SALES 为「我的线索」（本 change：无 SALES 合并全部 Tab）', async () => {
     server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
-    const { wrapper } = await mountView({ mine: [won, lost, old] })
+    const sales = await mountView()
     await flushPromises()
+    expect(sales.wrapper.findAll('.tab').map((t) => t.text().replace(/\d+/g, '').trim())).toEqual([
+      '我的线索',
+      '公海线索',
+    ])
 
-    await wrapper.findAll('.tab').find((t) => t.text().includes('全部线索'))!.trigger('click')
+    const admin = await mountView({ admin: true })
     await flushPromises()
-
-    const text = wrapper.find('[data-test="workbench-leads"]').text()
-    expect(text).toContain('本月赢单客户')
-    expect(text).toContain('本月流失客户')
-    expect(text).toContain('历史结束客户')
+    expect(admin.wrapper.findAll('.tab').map((t) => t.text().replace(/\d+/g, '').trim())).toEqual([
+      '全部线索',
+      '公海线索',
+    ])
   })
 
-  it('过滤器按关键词、业务类型和阶段筛选当前 Tab', async () => {
-    const a: LeadView = { ...SAMPLE_LEAD, id: 501, customerName: '星河建设集团', businessType: 'BIM咨询', stage: '方案报价' }
-    const b: LeadView = { ...SAMPLE_LEAD, id: 502, customerName: '远景产业园', businessType: '定制开发', stage: '商务谈判' }
-    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
-    const { wrapper } = await mountView({ mine: [a, b] })
+  it('关键词搜索下推后端（服务端过滤，非客户端 filter）', async () => {
+    let lastQuery = new URLSearchParams()
+    server.use(
+      http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)),
+      http.get('*/api/leads/mine', ({ request }) => {
+        const url = new URL(request.url)
+        lastQuery = url.searchParams
+        const k = url.searchParams.get('keyword')?.trim()
+        const rows = k === '星河'
+          ? [{ ...SAMPLE_LEAD, id: 501, customerName: '星河建设集团' }]
+          : [
+              { ...SAMPLE_LEAD, id: 501, customerName: '星河建设集团' },
+              { ...SAMPLE_LEAD, id: 502, customerName: '远景产业园' },
+            ]
+        return HttpResponse.json({ code: 'SUCCESS', message: 'OK', data: { items: rows, total: rows.length, page: 1, size: 10 } })
+      }),
+      staleLeads([]),
+    )
+    useAuthStore().currentUser = SALES_USER
+    const router = buildRouter()
+    await router.push('/')
+    await router.isReady()
+    const wrapper = mount(DashboardView, { props: { debounceMs: 0 }, global: { plugins: [router, ArcoVue] } })
     await flushPromises()
 
     await wrapper.find('.search').setValue('星河')
-    await wrapper.findAll('select')[0]!.setValue('BIM咨询')
-    await wrapper.findAll('select')[1]!.setValue('方案报价')
+    await new Promise((r) => setTimeout(r, 0))
     await flushPromises()
 
+    expect(lastQuery.get('keyword')).toBe('星河')
     const text = wrapper.find('[data-test="workbench-leads"]').text()
     expect(text).toContain('星河建设集团')
     expect(text).not.toContain('远景产业园')
@@ -276,15 +303,17 @@ describe('右侧详情面板', () => {
 describe('首屏加载仅发只读查询', () => {
   it('首屏加载只命中只读 GET 端点，不向任何写端点发请求', async () => {
     const calls: { method: string; path: string }[] = []
+    const pageEnvelope = (items: unknown[]) => ({ items, total: items.length, page: 1, size: 10 })
     const record = (path: string) =>
       http.all(`*/api${path}`, ({ request }) => {
         calls.push({ method: request.method, path })
         if (path === '/dashboard') return success(SAMPLE_DASHBOARD)
-        if (path === '/leads/mine') return success([SAMPLE_LEAD])
-        if (path === '/leads/pool') return success([SAMPLE_POOL_LEAD])
+        if (path === '/leads/mine') return success(pageEnvelope([SAMPLE_LEAD]))
+        if (path === '/leads/mine/stale') return success([SAMPLE_LEAD])
+        if (path === '/leads/pool') return success(pageEnvelope([SAMPLE_POOL_LEAD]))
         return success([])
       })
-    server.use(record('/dashboard'), record('/leads/mine'), record('/leads/pool'))
+    server.use(record('/dashboard'), record('/leads/mine'), record('/leads/mine/stale'), record('/leads/pool'))
 
     await mountView()
     await flushPromises()
@@ -319,50 +348,40 @@ describe('lead drawer close behavior', () => {
 })
 
 describe('refine lead list iteration', () => {
-  it('tab 顺序为我的线索、公海线索、全部线索', async () => {
-    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
-    const { wrapper } = await mountView()
+  it('工作区服务端分页：翻页向后端请求对应页，标签计数取后端 total', async () => {
+    let lastQuery = new URLSearchParams()
+    const pageRows = (p: number) =>
+      Array.from({ length: 10 }, (_, i) => ({
+        ...SAMPLE_LEAD,
+        id: 700 + (p - 1) * 10 + i,
+        customerName: `第${p}页客户${i + 1}`,
+      }))
+    server.use(
+      http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)),
+      http.get('*/api/leads/mine', ({ request }) => {
+        const url = new URL(request.url)
+        lastQuery = url.searchParams
+        const p = Number(url.searchParams.get('page') ?? '1')
+        return HttpResponse.json({ code: 'SUCCESS', message: 'OK', data: { items: pageRows(p), total: 23, page: p, size: 10 } })
+      }),
+      staleLeads([]),
+    )
+    useAuthStore().currentUser = SALES_USER
+    const router = buildRouter()
+    await router.push('/')
+    await router.isReady()
+    const wrapper = mount(DashboardView, { props: { debounceMs: 0 }, global: { plugins: [router, ArcoVue] } })
     await flushPromises()
 
-    expect(wrapper.findAll('.tab').map((tab) => tab.text().replace(/\d+/g, '').trim())).toEqual([
-      '我的线索',
-      '公海线索',
-      '全部线索',
-    ])
-  })
-
-  it('全部线索合并我的线索与公海线索', async () => {
-    const mine: LeadView = { ...SAMPLE_LEAD, id: 601, customerName: '我的线索客户' }
-    const pool: PoolLeadView = { ...SAMPLE_POOL_LEAD, id: 602, customerName: '公海线索客户' }
-    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
-    const { wrapper } = await mountView({ mine: [mine], pool: [pool] })
-    await flushPromises()
-
-    await wrapper.findAll('.tab').find((t) => t.text().includes('全部线索'))!.trigger('click')
-    await flushPromises()
-
-    const text = wrapper.find('[data-test="workbench-leads"]').text()
-    expect(text).toContain('我的线索客户')
-    expect(text).toContain('公海线索客户')
-  })
-
-  it('工作台列表支持标准分页且搜索后回到第一页', async () => {
-    const rows = Array.from({ length: 12 }, (_, index) => ({
-      ...SAMPLE_LEAD,
-      id: 700 + index,
-      customerName: index === 11 ? '星河分页客户' : `分页客户${index + 1}`,
-    }))
-    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
-    const { wrapper } = await mountView({ mine: rows })
-    await flushPromises()
-
+    // 标签计数取后端 total（23），不等于当页行数（10）
+    expect(wrapper.findAll('.tab')[0]!.text()).toContain('23')
     expect(wrapper.find('[data-test="lead-pagination"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="workbench-leads"]').text()).not.toContain('星河分页客户')
+    expect(wrapper.find('[data-test="workbench-leads"]').text()).toContain('第1页客户1')
 
-    await wrapper.find('.search').setValue('星河')
+    ;(wrapper.vm as unknown as { currentPage: number }).currentPage = 2
     await flushPromises()
-
-    expect(wrapper.find('[data-test="workbench-leads"]').text()).toContain('星河分页客户')
+    expect(lastQuery.get('page')).toBe('2')
+    expect(wrapper.find('[data-test="workbench-leads"]').text()).toContain('第2页客户1')
   })
 
   it('新增线索入口打开统一新建线索弹窗', async () => {
@@ -468,5 +487,48 @@ describe('抽屉切换即时刷新（refine drawer switch）', () => {
     expect(drawer.text()).toContain('公海客户甲')
     expect(drawer.text()).toContain('139****4321')
     expect(drawer.text()).not.toContain('名下客户甲')
+  })
+})
+
+describe('今日提醒区块（reminders，后端下推）', () => {
+  it('SALES 呈现建议认领（公海首页）与长期未跟踪（stale 端点），含认领与详情入口', async () => {
+    const poolItem: PoolLeadView = { ...SAMPLE_POOL_LEAD, id: 950, customerName: '建议认领客户' }
+    const staleItem: LeadView = { ...SAMPLE_LEAD, id: 951, customerName: '久未跟踪客户', lastTrackedAt: null }
+    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
+    const { wrapper } = await mountView({ pool: [poolItem], stale: [staleItem] })
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="workbench-reminders"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="reminder-claims"]').text()).toContain('建议认领客户')
+    expect(wrapper.find('[data-test="reminder-stale"]').text()).toContain('久未跟踪客户')
+    expect(wrapper.find('.reminder-claim').exists()).toBe(true)
+  })
+
+  it('ADMIN 不呈现建议认领入口（认领提醒不对 Admin 呈现）', async () => {
+    const staleItem: LeadView = { ...SAMPLE_LEAD, id: 952, customerName: '管理员久未跟踪' }
+    server.use(http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)))
+    const { wrapper } = await mountView({ admin: true, stale: [staleItem] })
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="reminder-stale"]').text()).toContain('管理员久未跟踪')
+    expect(wrapper.find('[data-test="reminder-claims"]').exists()).toBe(false)
+    expect(wrapper.find('.reminder-claim').exists()).toBe(false)
+  })
+
+  it('长期未跟踪条目点击进入详情抽屉', async () => {
+    const staleItem: LeadView = { ...SAMPLE_LEAD, id: 953, customerName: '待跟踪客户甲' }
+    server.use(
+      http.get('*/api/dashboard', () => success(SAMPLE_DASHBOARD)),
+      leadDetail(staleItem),
+      progressList([SAMPLE_PROGRESS]),
+    )
+    const { wrapper } = await mountView({ stale: [staleItem] })
+    await flushPromises()
+
+    await wrapper.find('[data-test="reminder-stale"] .reminder-link').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="lead-drawer"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="lead-drawer"]').text()).toContain('待跟踪客户甲')
   })
 })

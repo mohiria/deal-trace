@@ -13,6 +13,8 @@ import CreateLeadModal from '../components/CreateLeadModal.vue'
  * 公海线索（spec R2）：列表展示后端返回的电话（Sales 脱敏 / Admin 明文）；
  * Sales 可认领，认领成功后线索移出公海；并发冲突（LEAD_ALREADY_CLAIMED）提示并刷新。
  */
+const props = withDefaults(defineProps<{ debounceMs?: number }>(), { debounceMs: 300 })
+
 const auth = useAuthStore()
 const leads = useLeadsStore()
 const router = useRouter()
@@ -21,6 +23,7 @@ const keyword = ref('')
 const currentPage = ref(1)
 const pageSize = 10
 const createLeadVisible = ref(false)
+let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const columns: TableColumnData[] = [
   { title: '客户', slotName: 'customerCell' },
@@ -32,22 +35,28 @@ const columns: TableColumnData[] = [
   ...(auth.isAdmin ? [] : [{ title: '操作', slotName: 'operations' } as TableColumnData]),
 ]
 
-const filteredRows = computed(() => {
-  const search = keyword.value.trim().toLowerCase()
-  if (!search) return leads.pool
-  return leads.pool.filter((lead) =>
-    [lead.customerName, lead.customerUsci, lead.businessType, lead.stage, lead.contactName, lead.contactPhone]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-      .includes(search),
-  )
-})
+// 服务端分页：当前页 items 与 total 取自 store（后端全表匹配 keyword 后切页）。
+const rows = computed(() => leads.pool)
+const total = computed(() => leads.poolTotal)
 
-const pagedRows = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  return filteredRows.value.slice(start, start + pageSize)
-})
+/** 拉取当前页：page/size/keyword 下推后端。 */
+function load() {
+  void leads.loadPool({ page: currentPage.value, size: pageSize, keyword: keyword.value })
+}
+
+function onSearchInput() {
+  if (searchTimer !== null) {
+    clearTimeout(searchTimer)
+  }
+  searchTimer = setTimeout(() => {
+    // 换关键词回第 1 页；page 变化由 watch 触发重载，避免重复请求。
+    if (currentPage.value !== 1) {
+      currentPage.value = 1
+    } else {
+      load()
+    }
+  }, props.debounceMs)
+}
 
 function openCustomerCreate() {
   void router.push({ name: 'customers' })
@@ -61,7 +70,7 @@ async function onClaim(id: number) {
   } catch (error) {
     if (error instanceof ApiError && error.code === 'LEAD_ALREADY_CLAIMED') {
       Message.warning('该线索已被认领')
-      await leads.loadPool()
+      load()
     } else if (error instanceof ApiError) {
       Message.error(error.message)
     } else {
@@ -72,13 +81,14 @@ async function onClaim(id: number) {
   }
 }
 
-watch(keyword, () => {
-  currentPage.value = 1
-})
+watch(currentPage, () => load())
 
 onMounted(() => {
-  void leads.loadPool()
+  load()
 })
+
+// 测试可观测/可驱动的分页状态（组件测试 seam）。
+defineExpose({ currentPage })
 </script>
 
 <template>
@@ -100,11 +110,12 @@ onMounted(() => {
         class="list-search"
         type="search"
         placeholder="搜索客户 / 信用代码 / 业务类型 / 联系人"
+        @input="onSearchInput"
       />
     </div>
 
     <a-table
-      :data="pagedRows"
+      :data="rows"
       :columns="columns"
       :pagination="false"
       :loading="leads.loading"
@@ -134,10 +145,10 @@ onMounted(() => {
         <div class="pool-empty">公海暂无线索</div>
       </template>
     </a-table>
-    <div v-if="filteredRows.length > pageSize" class="pagination-bar" data-test="list-pagination">
-      <a-pagination v-model:current="currentPage" :total="filteredRows.length" :page-size="pageSize" show-total />
+    <div v-if="total > pageSize" class="pagination-bar" data-test="list-pagination">
+      <a-pagination v-model:current="currentPage" :total="total" :page-size="pageSize" show-total />
     </div>
-    <CreateLeadModal v-model:visible="createLeadVisible" @created="leads.loadPool" />
+    <CreateLeadModal v-model:visible="createLeadVisible" @created="load" />
   </section>
 </template>
 

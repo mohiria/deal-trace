@@ -159,6 +159,25 @@ class LeadListPaginationTest extends IntegrationTest {
     }
 
     @Test
+    void admin_all_pageOfAllPoolLeads_doesNotError() throws Exception {
+        // 回归：一整页线索全部无归属（公海）时，loadOwnerNames 返回空映射；
+        // 旧实现对每行做 ownerNames.get(null)，若空映射为不可变 Map.of() 则 NPE→500。
+        Long cust = insertCustomer("公海客户", usci(1));
+        LocalDateTime base = LocalDateTime.now().minusDays(1);
+        for (int i = 1; i <= 3; i++) {
+            insertLead(null, cust, "公海联系人" + i, base.plusMinutes(i));
+        }
+        String token = jwtService.generateToken(admin);
+        mockMvc.perform(get("/leads").param("page", "1").param("size", "20")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.total").value(3))
+            .andExpect(jsonPath("$.data.items.length()").value(3))
+            .andExpect(jsonPath("$.data.items[0].ownerSalesId").doesNotExist())
+            .andExpect(jsonPath("$.data.items[0].customerName").value("公海客户"));
+    }
+
+    @Test
     void sales_listAll_stillForbidden() throws Exception {
         String token = jwtService.generateToken(salesA);
         mockMvc.perform(get("/leads")

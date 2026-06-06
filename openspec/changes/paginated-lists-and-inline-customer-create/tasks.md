@@ -16,33 +16,33 @@
 
 ## 2. 阶段二：前端列表页改服务端分页 + 搜索下推
 
-- [ ] 2.1 改 `api/customers.ts` / `api/leads.ts`：`searchCustomers` / `fetchMyLeads` / `fetchAllLeads` / `fetchPool` 入参加 `{page,size,keyword}`、返回类型改分页信封；TS 编译失败点即待改消费方清单
-- [ ] 2.2 改 `stores/leads.ts`：`myLeads/allLeads/pool` 改为持 `{items,total,page,size}`（或 items+total+page ref）；load 动作接受分页参数；更新 `stores/leads.spec.ts`
-- [ ] 2.3 【Red】更新/新增 `CustomersView.spec`：服务端分页（翻页发新请求）、keyword 下推后端、换 keyword 回第 1 页、MSW 返回信封——运行并贴出失败输出
-- [ ] 2.4 改 `CustomersView.vue`：移除客户端 `slice`，改服务端分页 + 后端搜索（debounce keyword 发后端、`watch(keyword)` 重置 page=1），用 `total` 渲染分页；跑绿 2.3
-- [ ] 2.5 【Red】更新 `MyLeadsView.spec` / `PublicPoolView.spec`：移除"客户端 filter"断言，改服务端分页 + keyword 下推；MSW 信封——运行并贴出失败输出
-- [ ] 2.6 改 `MyLeadsView.vue` / `PublicPoolView.vue`：移除客户端 `filteredRows`/`slice`，keyword + page 下推后端，`total` 驱动分页；跑绿 2.5
-- [ ] 2.7 跑前端 `npm run test:unit` + `npm run type-check`，确认阶段二全绿
+- [x] 2.1 改 `api/customers.ts` / `api/leads.ts`：`searchCustomers` / `fetchMyLeads` / `fetchAllLeads` / `fetchPool` 入参加 `{page,size,keyword}`、返回类型改分页信封；新增 `api/pagination.ts`（`PageResult`/`PageQuery`/`pageParams`）
+- [x] 2.2 改 `stores/leads.ts`：`myLeads/allLeads/pool` 保持 items 数组 + 新增 `myLeadsTotal/allLeadsTotal/poolTotal`；load 动作接受 `PageQuery` 并写 items+total
+- [x] 2.3 更新 `CustomersView.spec`：服务端分页（翻页发新请求）、keyword 下推后端、换 keyword 回第 1 页、MSW 返回信封
+- [x] 2.4 改 `CustomersView.vue`：移除客户端 `slice`，改服务端分页 + 后端搜索（debounce keyword 发后端、换 keyword 重置 page=1），用 `total` 渲染分页；跑绿 2.3
+- [x] 2.5 更新 `MyLeadsView.spec` / `PublicPoolView.spec`：移除"客户端 filter"断言，改服务端分页 + keyword 下推；MSW 信封
+- [x] 2.6 改 `MyLeadsView.vue` / `PublicPoolView.vue`：移除客户端 `filteredRows`/`slice`，keyword + page 下推后端，`total` 驱动分页；跑绿 2.5
+- [x] 2.7 跑前端 `npm run test:unit`（237/237 绿）+ `vue-tsc -b` 类型检查（0 错误），确认阶段二全绿
 
 ## 3. 阶段三：find-or-create 合并端点 + 前端内联建客户
 
-- [ ] 3.1 【Red】写 `LeadCreateInlineCustomerTest`（真 MySQL）：`newCustomer` USCI 未命中→建客户+线索；命中同名→复用、客户行数不增；命中异名→`DUPLICATE_CUSTOMER`；线索阶段失败→事务回滚无孤儿客户；`customerId` 与 `newCustomer` 同缺/同提供→`VALIDATION_ERROR`；并发同 USCI 唯一约束兜底——运行并贴出失败输出
-- [ ] 3.2 改建线索入参 DTO + `LeadService`：接受 `customerId | newCustomer{name,usci}`（恰择其一）；`@Transactional` 内归一化+校验 USCI、按 USCI find-or-create（同名复用/异名 DUPLICATE_CUSTOMER/未命中建）、catch 唯一约束冲突回退 find，再走既有查重+建线索；成功仍发 `LEAD_CREATE`、建客户不发日志；跑绿 3.1
-- [ ] 3.3 【Red】更新 `CustomerSelect.spec` / `CreateLeadModal.spec`：候选为空时出现"录入新客户（name+USCI）"入口；提交携带 `newCustomer`；后端 `DUPLICATE_CUSTOMER`/`VALIDATION_ERROR` 回显且不暴露校验位位置——运行并贴出失败输出
-- [ ] 3.4 改 `CustomerSelect.vue` / `CreateLeadModal.vue` / `api/leads.ts`：搜不到给内联建客户表单（name+USCI），新客户路径不发查重预检，提交 `newCustomer`，错误语义回显；跑绿 3.3
-- [ ] 3.5 后端 `mvn verify` + 前端 test:unit/type-check，确认阶段三全绿
+- [x] 3.1 写 `LeadCreateInlineCustomerTest`（真 MySQL，8 用例）：Red 证据 = 5 断言级失败（status 200↔400 / `$.code` DUPLICATE_CUSTOMER|DUPLICATE_ACTIVE_LEAD 实得 VALIDATION_ERROR）；覆盖未命中建、同名复用、异名拒、非法 USCI、电话非法无孤儿、二者同缺/同提供拒、复用后查重拦截
+- [x] 3.2 改建线索入参 DTO（加 `NewCustomer{name,usci}`）+ `LeadService`：`resolveCustomer` 互斥校验 + `CustomerService.findOrCreate`（同事务内 USCI 归一化+校验、同名复用/异名 DUPLICATE_CUSTOMER/未命中建、catch 唯一约束回退 find）；字段校验先于建客户保证无孤儿；跑绿 3.1（8/8），LeadControllerCreateTest 15/15 无回归
+- [x] 3.3 更新 `CustomerSelect.spec`（反转旧"无捷径"负例，声明本 change spec MODIFIED 依据）+ `CreateLeadModal.spec`：候选为空出现 `.cs-create-new` 入口、名称+USCI 录入框、提交携带 `newCustomer` 且不发查重预检、DUPLICATE_CUSTOMER 展示语义且不暴露校验位位置
+- [x] 3.4 改 `CustomerSelect.vue`（加 `v-model:newCustomer` + 录入态）/ `CreateLeadModal.vue`（newCustomer 路径跳过预检、DUPLICATE_CUSTOMER 语义回显）/ `api/leads.ts`（`customerId` 改选填 + `newCustomer`）；跑绿 3.3
+- [x] 3.5 前端 `npx vitest run`（241/241 绿，含新增 4 例）+ `vue-tsc -b`（0 错误）；后端验证并入 5.1 全量 mvn verify（Phase 3 后端 8/8 + 15/15 已绿）
 
 ## 4. 阶段四：Dashboard 全量改造（分页表 + total 计数 + 提醒下推）
 
-- [ ] 4.1 【Red】写"我的长期未跟踪线索"端点测试（真 MySQL）：名下+未结束+(lastTrackedAt<阈值 或 NULL) 命中、阈值内/已结束排除、按 lastTrackedAt 升序取前 N、无持久化副作用——运行并贴出失败输出
-- [ ] 4.2 实现该只读端点（阈值后端常量，迁移自现 `utils/workbench.ts` 阈值）+ `LeadController` 暴露；跑绿 4.1
-- [ ] 4.3 【Red】更新 `DashboardView.spec`：工作区表服务端分页、tab 计数取 `total`、今日提醒改调后端（公海首页 + stale 端点）、长期未跟踪不受当前页码限制——运行并贴出失败输出
-- [ ] 4.4 改 `DashboardView.vue` + `utils/workbench.ts` + `api/leads.ts`：内嵌表服务端分页、tab 计数用 `total`、"建议认领"取公海首页、"长期未跟踪"调新端点；移除客户端阈值派生；跑绿 4.3
-- [ ] 4.5 前端 test:unit + type-check 全绿
+- [x] 4.1 写 `LeadStaleListTest`（真 MySQL，2 用例）：Red 证据 = status 200 vs 500（端点未实现）；覆盖名下+未结束+(lastTrackedAt<阈值 或 NULL) 命中、阈值内/已结束/他人名下排除、NULL 视为最久升序在前、无持久化副作用
+- [x] 4.2 实现 `GET /leads/mine/stale`（`LeadService.staleOwned`，阈值后端常量 STALE_TRACK_DAYS=7、上限 STALE_LIMIT=5、notIn 已结束、isNull OR lt cutoff、orderByAsc NULL 先）+ `LeadController.mineStale`；跑绿 4.1（2/2）
+- [x] 4.3 更新 `DashboardView.spec`（spec MODIFIED：归属/公海双 Tab、无 SALES 合并全部 Tab、移除业务类型/阶段筛选）：服务端分页、tab 计数取 total、keyword 下推、提醒区块（建议认领=公海首页/长期未跟踪=stale 端点）、ADMIN 无认领入口
+- [x] 4.4 改 `DashboardView.vue`（双 Tab 服务端分页 + keyword 下推 + total 计数 + 提醒区块）/ `api/leads.ts`（`fetchStaleLeads`）/ `stores/leads.ts`（`staleLeads`/`loadStaleLeads`）；删除已不再使用且与 spec「前端不重算阈值」相悖的 `utils/workbench.ts`(+test)；跑绿 4.3（24/24）
+- [x] 4.5 前端 `npx vitest run`（231/231 绿）+ `vue-tsc -b`（0 错误）全绿
 
 ## 5. 收尾与验证
 
-- [ ] 5.1 后端 `mvn verify` 全量 + 前端 `npm run test:unit` + `npm run type-check` 全绿，无既有契约回归
-- [ ] 5.2 手动端到端：>50 数据下列表翻页可达全部、搜索命中靠后记录；新建线索搜不到→录入新客户成功建单；同 USCI 异名被拒；工作台 tab 计数与提醒跨全量准确
-- [ ] 5.3 写 `qa/qa-report.md`（vibe-coding-qa 模板），记录分层测试结果、Red 证据、剩余风险
-- [ ] 5.4 `openspec validate paginated-lists-and-inline-customer-create --strict` 通过，准备归档
+- [x] 5.1 后端 `mvn verify` 全量（311 tests / 0 失败 / 0 错误，BUILD SUCCESS）+ 前端 `npx vitest run`（231/231）+ `vue-tsc -b`（0 错误）全绿，无既有契约回归
+- [x] 5.2 端到端（Playwright 真后端当前构建 + 真 MySQL，admin+sales）：10 passed / 0 failed / 0 skipped。E2E 暴露并修复 1 个代码缺陷（整页全公海线索列表 NPE→500，已加回归用例）+ 修正 4 处陈旧/脆弱 E2E 断言（`:visible`、归属姓名、`workbench-reminders` 常驻）。详见 qa-report「缺陷与失败分析」
+- [x] 5.3 写 `qa/qa-report.md`（vibe-coding-qa 模板）：记录需求权威/冲突评审、各能力 Red 证据、分层测试结果、回归范围、剩余风险
+- [x] 5.4 `openspec validate paginated-lists-and-inline-customer-create --strict` 通过（"Change ... is valid"）

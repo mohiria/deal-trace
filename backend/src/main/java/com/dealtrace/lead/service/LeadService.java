@@ -11,6 +11,7 @@ import com.dealtrace.common.PageQuery;
 import com.dealtrace.common.PageView;
 import com.dealtrace.customer.entity.Customer;
 import com.dealtrace.customer.repository.CustomerMapper;
+import com.dealtrace.customer.service.CustomerService;
 import com.dealtrace.lead.dto.CreateLeadRequest;
 import com.dealtrace.lead.dto.DuplicateCheckResponse;
 import com.dealtrace.lead.entity.BusinessType;
@@ -50,17 +51,20 @@ public class LeadService {
 
     private final LeadMapper leadMapper;
     private final CustomerMapper customerMapper;
+    private final CustomerService customerService;
     private final AccountMapper accountMapper;
     private final LeadDuplicateService duplicateService;
     private final SystemLogPort systemLogPort;
 
     public LeadService(LeadMapper leadMapper,
                        CustomerMapper customerMapper,
+                       CustomerService customerService,
                        AccountMapper accountMapper,
                        LeadDuplicateService duplicateService,
                        SystemLogPort systemLogPort) {
         this.leadMapper = leadMapper;
         this.customerMapper = customerMapper;
+        this.customerService = customerService;
         this.accountMapper = accountMapper;
         this.duplicateService = duplicateService;
         this.systemLogPort = systemLogPort;
@@ -71,10 +75,8 @@ public class LeadService {
         if (req == null) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "请求体不可为空");
         }
-        // 1. 必填字段（customerId / businessType / contactName / contactPhone）
-        if (req.customerId() == null) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "请选择关联客户");
-        }
+        // 1. 字段校验（businessType / contactName / contactPhone）——先于建客户，
+        //    保证电话非法等输入错误不产生孤儿客户。
         BusinessType type = BusinessType.fromDbValue(req.businessType());
         if (type == null) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "业务类型非法，仅支持 BIM咨询 / BIM培训 / 定制开发");
@@ -88,11 +90,9 @@ public class LeadService {
         }
         String contactPhone = req.contactPhone().strip();
 
-        // 2. customerId 存在性
-        Customer customer = customerMapper.selectById(req.customerId());
-        if (customer == null) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "关联客户不存在");
-        }
+        // 2. 解析关联客户：customerId（选既有）或 newCustomer（内联 find-or-create），恰择其一
+        Customer customer = resolveCustomer(req);
+        Long customerId = customer.getId();
 
         // 3. 归属规则
         Long ownerSalesId = resolveOwner(req, principal);
@@ -101,7 +101,7 @@ public class LeadService {
         short businessYear = (short) LocalDate.now().getYear();
 
         // 5. 查重三元组三态
-        DuplicateCheckResponse dup = duplicateService.check(businessYear, req.customerId(), type);
+        DuplicateCheckResponse dup = duplicateService.check(businessYear, customerId, type);
         if (!dup.canCreate()) {
             ErrorCode code = ErrorCode.valueOf(dup.blockingReason());
             String msg = code == ErrorCode.DUPLICATE_ACTIVE_LEAD
@@ -112,7 +112,7 @@ public class LeadService {
 
         // 6. INSERT
         Lead lead = new Lead();
-        lead.setCustomerId(req.customerId());
+        lead.setCustomerId(customerId);
         lead.setBusinessYear(businessYear);
         lead.setBusinessType(type);
         lead.setContactName(contactName);
@@ -133,6 +133,28 @@ public class LeadService {
             com.dealtrace.systemlog.SystemLogDetails.leadCreate(ownerSalesId, customer.getName(), type.getDbValue()));
 
         return lead;
+    }
+
+    /**
+     * 解析线索关联客户：{@code customerId} 与 {@code newCustomer} 恰择其一。
+     * 两者同缺或同提供 → VALIDATION_ERROR；newCustomer 走 {@link CustomerService#findOrCreate}
+     * （同一事务内，失败随线索回滚无孤儿）。
+     */
+    private Customer resolveCustomer(CreateLeadRequest req) {
+        boolean hasCustomerId = req.customerId() != null;
+        boolean hasNewCustomer = req.newCustomer() != null;
+        if (hasCustomerId == hasNewCustomer) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                "请选择既有客户或录入新客户（二者择一）");
+        }
+        if (hasNewCustomer) {
+            return customerService.findOrCreate(req.newCustomer().name(), req.newCustomer().usci());
+        }
+        Customer customer = customerMapper.selectById(req.customerId());
+        if (customer == null) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "关联客户不存在");
+        }
+        return customer;
     }
 
     private Long resolveOwner(CreateLeadRequest req, AccountPrincipal principal) {
@@ -176,6 +198,27 @@ public class LeadService {
     @Transactional(readOnly = true)
     public PageView<Lead> allLeads(PageQuery query) {
         return pagedLeads(new QueryWrapper<>(), query);
+    }
+
+    /** 「我的长期未跟踪线索」阈值天数（后端集中定义，前端不重算）。 */
+    public static final int STALE_TRACK_DAYS = 7;
+    /** 提醒展示用的数量上限（非全量浏览）。 */
+    public static final int STALE_LIMIT = 5;
+
+    /**
+     * GET /api/leads/mine/stale：调用者名下、未结束、且 lastTrackedAt 早于阈值（或从未跟踪 NULL）的线索，
+     * 按 lastTrackedAt 升序（NULL 视为最久，MySQL ASC 下天然排前）取前 {@link #STALE_LIMIT} 条；无副作用。
+     */
+    @Transactional(readOnly = true)
+    public List<Lead> staleOwned(AccountPrincipal principal) {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(STALE_TRACK_DAYS);
+        QueryWrapper<Lead> qw = new QueryWrapper<Lead>()
+            .eq("owner_sales_id", principal.id())
+            .notIn("stage", LeadStage.WON.getDbValue(), LeadStage.LOST.getDbValue())
+            .and(w -> w.isNull("last_tracked_at").or().lt("last_tracked_at", cutoff))
+            .orderByAsc("last_tracked_at")
+            .last("LIMIT " + STALE_LIMIT);
+        return leadMapper.selectList(qw);
     }
 
     /** 在给定基础条件上叠加 keyword 过滤 + count + 倒序切页。 */

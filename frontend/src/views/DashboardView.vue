@@ -9,13 +9,19 @@ import { formatDateTime } from '../utils/datetime'
 import { useAuthStore } from '../stores/auth'
 import { useLeadsStore } from '../stores/leads'
 import { ApiError } from '../api/client'
+import { fetchPool } from '../api/leads'
 import type { LeadView, PoolLeadView } from '../api/leads'
-import { BUSINESS_TYPES } from '../utils/lead'
 import LeadDetailPanel from '../components/LeadDetailPanel.vue'
 import CreateLeadModal from '../components/CreateLeadModal.vue'
 
-type LeadTab = 'mine' | 'pool' | 'all'
+/** 工作区标签：归属（SALES 名下 / ADMIN 全部）与公海，均服务端分页。 */
+type LeadTab = 'owned' | 'pool'
 type WorkbenchRow = (LeadView | PoolLeadView) & { ownerLabel?: string }
+
+/** 建议认领提醒条数上限（取公海首页前若干条）。 */
+const SUGGESTED_CLAIM_LIMIT = 5
+
+const props = withDefaults(defineProps<{ debounceMs?: number }>(), { debounceMs: 300 })
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -25,10 +31,8 @@ const loading = ref(false)
 const error = ref(false)
 const data = ref<DashboardView | null>(null)
 
-const activeTab = ref<LeadTab>('mine')
-const search = ref('')
-const typeFilter = ref('')
-const stageFilter = ref('')
+const activeTab = ref<LeadTab>('owned')
+const keyword = ref('')
 const activeLeadId = ref<number | null>(null)
 /** SALES 公海线索抽屉只读脱敏模式：用已加载公海数据渲染，不调明文详情端点。 */
 const poolReadonly = ref(false)
@@ -36,6 +40,10 @@ const claimingId = ref<number | null>(null)
 const createLeadVisible = ref(false)
 const currentPage = ref(1)
 const pageSize = 10
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+
+// 今日提醒：建议认领（公海首页前若干条，仅 SALES）独立于公海 Tab 的分页状态。
+const suggestedClaims = ref<PoolLeadView[]>([])
 
 async function loadDashboard() {
   loading.value = true
@@ -58,17 +66,87 @@ function openCreateLead() {
   createLeadVisible.value = true
 }
 
+// ---- 工作区：服务端分页（page/size/keyword 下推后端，total 驱动计数与分页控件）----
+const ownedRows = computed<LeadView[]>(() => (auth.isAdmin ? leads.allLeads : leads.myLeads))
+const ownedTotal = computed(() => (auth.isAdmin ? leads.allLeadsTotal : leads.myLeadsTotal))
+const ownedTabLabel = computed(() => (auth.isAdmin ? '全部线索' : '我的线索'))
+
+const currentRows = computed<WorkbenchRow[]>(() => {
+  if (activeTab.value === 'pool') {
+    return leads.pool.map((lead) => ({ ...lead, ownerLabel: '公海' }))
+  }
+  return ownedRows.value.map((lead) => ({ ...lead, ownerLabel: ownerText(lead) }))
+})
+
+const total = computed(() => (activeTab.value === 'pool' ? leads.poolTotal : ownedTotal.value))
+
+const tabCounts = computed(() => ({ owned: ownedTotal.value, pool: leads.poolTotal }))
+
+const reminderVisible = computed(
+  () => (!auth.isAdmin && suggestedClaims.value.length > 0) || leads.staleLeads.length > 0,
+)
+
+function workbenchQuery() {
+  return { page: currentPage.value, size: pageSize, keyword: keyword.value }
+}
+
+/** 按当前 Tab 拉取当页：归属 → mine/all（按角色）；公海 → pool。 */
+function loadWorkbench() {
+  if (activeTab.value === 'pool') {
+    void leads.loadPool(workbenchQuery())
+  } else if (auth.isAdmin) {
+    void leads.loadAllLeads(workbenchQuery())
+  } else {
+    void leads.loadMyLeads(workbenchQuery())
+  }
+}
+
+/** 今日提醒区块：长期未跟踪（后端 stale 端点）+ 建议认领（公海首页，仅 SALES）。 */
+async function loadReminders() {
+  try {
+    await leads.loadStaleLeads()
+  } catch {
+    /* 提醒失败不阻断首屏 */
+  }
+  if (!auth.isAdmin) {
+    try {
+      suggestedClaims.value = (await fetchPool({ page: 1, size: SUGGESTED_CLAIM_LIMIT })).items
+    } catch {
+      suggestedClaims.value = []
+    }
+  }
+}
+
 function selectTab(tab: LeadTab) {
   activeTab.value = tab
   activeLeadId.value = null
+  poolReadonly.value = false
   currentPage.value = 1
+  loadWorkbench()
 }
 
-function openLead(id: number) {
-  const row = currentRows.value.find((r) => r.id === id)
-  if (row?.ownerLabel === '公海' && !auth.isAdmin) {
-    // SALES 公海线索：用脱敏公海数据渲染只读摘要 + 认领入口，不取明文详情（PRD §7.5）。
-    leads.setCurrentFromPool(row as PoolLeadView)
+function onSearchInput() {
+  if (searchTimer !== null) {
+    clearTimeout(searchTimer)
+  }
+  searchTimer = setTimeout(() => {
+    // 换关键词回第 1 页；page 变化由 watch 触发重载，避免重复请求。
+    if (currentPage.value !== 1) {
+      currentPage.value = 1
+    } else {
+      loadWorkbench()
+    }
+  }, props.debounceMs)
+}
+
+watch(currentPage, () => loadWorkbench())
+
+/**
+ * 打开线索详情抽屉。`poolRow` 给定时表示来自公海（SALES 只读脱敏，不取明文详情，PRD §7.5）。
+ */
+function openLead(id: number, poolRow: PoolLeadView | null = null) {
+  if (poolRow && !auth.isAdmin) {
+    leads.setCurrentFromPool(poolRow)
     poolReadonly.value = true
   } else {
     poolReadonly.value = false
@@ -80,61 +158,6 @@ function closeLeadDrawer() {
   activeLeadId.value = null
   poolReadonly.value = false
 }
-
-const baseOwnedRows = computed<LeadView[]>(() => (auth.isAdmin ? leads.allLeads : leads.myLeads))
-
-const currentRows = computed<WorkbenchRow[]>(() => {
-  if (activeTab.value === 'pool') {
-    return leads.pool.map((lead) => ({ ...lead, ownerLabel: '公海' }))
-  }
-  if (activeTab.value === 'all') {
-    return [
-      ...baseOwnedRows.value.map((lead) => ({ ...lead, ownerLabel: ownerText(lead) })),
-      ...leads.pool.map((lead) => ({ ...lead, ownerLabel: '公海' })),
-    ]
-  }
-  return baseOwnedRows.value.map((lead) => ({ ...lead, ownerLabel: ownerText(lead) }))
-})
-
-const stageOptions = computed(() => {
-  const stages = new Set<string>()
-  currentRows.value.forEach((lead) => {
-    if (lead.stage) {
-      stages.add(lead.stage)
-    }
-  })
-  return Array.from(stages)
-})
-
-const filteredRows = computed(() => {
-  const keyword = search.value.trim().toLowerCase()
-  return currentRows.value.filter((lead) => {
-    const text = [lead.customerName, lead.customerUsci, lead.contactName, lead.contactPhone]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-    return (
-      (!keyword || text.includes(keyword)) &&
-      (!typeFilter.value || lead.businessType === typeFilter.value) &&
-      (!stageFilter.value || lead.stage === stageFilter.value)
-    )
-  })
-})
-
-const tabCounts = computed(() => ({
-  mine: baseOwnedRows.value.length,
-  pool: leads.pool.length,
-  all: baseOwnedRows.value.length + leads.pool.length,
-}))
-
-const pagedRows = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  return filteredRows.value.slice(start, start + pageSize)
-})
-
-watch([search, typeFilter, stageFilter], () => {
-  currentPage.value = 1
-})
 
 const metricCards = computed(() => {
   if (!data.value) {
@@ -185,14 +208,17 @@ async function onClaim(id: number) {
   try {
     const claimed = await leads.claim(id)
     Message.success('认领成功，已移入我的线索')
-    activeTab.value = 'mine'
+    activeTab.value = 'owned'
     poolReadonly.value = false
+    currentPage.value = 1
     activeLeadId.value = claimed.id
-    await leads.loadMyLeads()
+    loadWorkbench()
+    await loadReminders()
   } catch (e) {
     if (e instanceof ApiError && e.code === 'LEAD_ALREADY_CLAIMED') {
       Message.warning('该线索已被认领')
-      await leads.loadPool()
+      loadWorkbench()
+      await loadReminders()
     } else if (e instanceof ApiError) {
       Message.error(e.message)
     } else {
@@ -204,12 +230,8 @@ async function onClaim(id: number) {
 }
 
 async function refreshLeadListsAfterCreate() {
-  if (auth.isAdmin) {
-    await leads.loadAllLeads()
-  } else {
-    await leads.loadMyLeads()
-  }
-  await leads.loadPool()
+  loadWorkbench()
+  await loadReminders()
 }
 
 function ownerText(lead: Pick<LeadView, 'ownerSalesId' | 'ownerSalesName'>): string {
@@ -234,13 +256,12 @@ function typeTone(type: string | null): string {
 
 onMounted(() => {
   void loadDashboard()
-  if (auth.isAdmin) {
-    void leads.loadAllLeads()
-  } else {
-    void leads.loadMyLeads()
-  }
-  void leads.loadPool()
+  loadWorkbench()
+  void loadReminders()
 })
+
+// 测试可观测/可驱动的分页状态（组件测试 seam）。
+defineExpose({ currentPage })
 </script>
 
 <template>
@@ -279,32 +300,60 @@ onMounted(() => {
         </article>
       </section>
 
+      <section data-test="workbench-reminders" class="reminders-card">
+        <div v-if="!auth.isAdmin && suggestedClaims.length > 0" class="reminder-group" data-test="reminder-claims">
+          <h3 class="reminder-title">建议优先认领</h3>
+          <ul class="reminder-list">
+            <li v-for="item in suggestedClaims" :key="`claim-${item.id}`" class="reminder-item">
+              <button class="reminder-link" type="button" @click="openLead(item.id, item)">
+                {{ item.customerName ?? '—' }}
+              </button>
+              <span class="reminder-meta">{{ item.businessType ?? '—' }}</span>
+              <button
+                class="reminder-claim"
+                type="button"
+                :disabled="claimingId === item.id"
+                @click="onClaim(item.id)"
+              >
+                {{ claimingId === item.id ? '认领中' : '认领' }}
+              </button>
+            </li>
+          </ul>
+        </div>
+        <div v-if="leads.staleLeads.length > 0" class="reminder-group" data-test="reminder-stale">
+          <h3 class="reminder-title">长期未跟踪</h3>
+          <ul class="reminder-list">
+            <li v-for="item in leads.staleLeads" :key="`stale-${item.id}`" class="reminder-item">
+              <button class="reminder-link" type="button" @click="openLead(item.id)">
+                {{ item.customerName ?? '—' }}
+              </button>
+              <span class="reminder-meta">最后跟踪：{{ formatDateTime(item.lastTrackedAt, '从未跟踪') }}</span>
+            </li>
+          </ul>
+        </div>
+        <p v-if="!reminderVisible" class="reminder-empty" data-test="reminder-empty">今日暂无待办提醒</p>
+      </section>
+
       <section data-test="workbench-leads" class="workbench-card">
         <header class="workbench-head">
           <div class="tabs" aria-label="线索视图">
-            <button class="tab" :class="{ active: activeTab === 'mine' }" type="button" @click="selectTab('mine')">
-              我的线索
-              <span>{{ tabCounts.mine }}</span>
+            <button class="tab" :class="{ active: activeTab === 'owned' }" type="button" @click="selectTab('owned')">
+              {{ ownedTabLabel }}
+              <span>{{ tabCounts.owned }}</span>
             </button>
             <button class="tab" :class="{ active: activeTab === 'pool' }" type="button" @click="selectTab('pool')">
               公海线索
               <span>{{ tabCounts.pool }}</span>
             </button>
-            <button class="tab" :class="{ active: activeTab === 'all' }" type="button" @click="selectTab('all')">
-              全部线索
-              <span>{{ tabCounts.all }}</span>
-            </button>
           </div>
           <div class="filters">
-            <input v-model="search" class="control search" type="search" placeholder="搜索客户 / 信用代码 / 联系人" />
-            <select v-model="typeFilter" class="control">
-              <option value="">全部业务类型</option>
-              <option v-for="type in BUSINESS_TYPES" :key="type" :value="type">{{ type }}</option>
-            </select>
-            <select v-model="stageFilter" class="control">
-              <option value="">全部阶段</option>
-              <option v-for="stage in stageOptions" :key="stage" :value="stage">{{ stage }}</option>
-            </select>
+            <input
+              v-model="keyword"
+              class="control search"
+              type="search"
+              placeholder="搜索客户 / 信用代码 / 联系人"
+              @input="onSearchInput"
+            />
           </div>
         </header>
 
@@ -322,9 +371,13 @@ onMounted(() => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="lead in pagedRows" :key="lead.id" :class="{ selected: activeLeadId === lead.id }">
+              <tr v-for="lead in currentRows" :key="lead.id" :class="{ selected: activeLeadId === lead.id }">
                 <td>
-                  <button class="lead-link" type="button" @click="openLead(lead.id)">
+                  <button
+                    class="lead-link"
+                    type="button"
+                    @click="openLead(lead.id, activeTab === 'pool' ? (lead as PoolLeadView) : null)"
+                  >
                     <strong>{{ lead.customerName ?? '—' }}</strong>
                     <span>{{ lead.customerUsci ?? '无信用代码' }}</span>
                   </button>
@@ -336,7 +389,13 @@ onMounted(() => {
                 <td>{{ formatDateTime(lead.lastTrackedAt, '暂无') }}</td>
                 <td>
                   <div class="row-actions">
-                    <button class="mini-btn primary" type="button" @click="openLead(lead.id)">详情</button>
+                    <button
+                      class="mini-btn primary"
+                      type="button"
+                      @click="openLead(lead.id, activeTab === 'pool' ? (lead as PoolLeadView) : null)"
+                    >
+                      详情
+                    </button>
                     <button
                       v-if="activeTab === 'pool' && !auth.isAdmin"
                       class="mini-btn claim-btn"
@@ -349,14 +408,14 @@ onMounted(() => {
                   </div>
                 </td>
               </tr>
-              <tr v-if="filteredRows.length === 0">
+              <tr v-if="currentRows.length === 0">
                 <td colspan="7" class="empty-row">暂无匹配线索</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <div v-if="filteredRows.length > pageSize" class="pagination-bar" data-test="lead-pagination">
-          <a-pagination v-model:current="currentPage" :total="filteredRows.length" :page-size="pageSize" show-total />
+        <div v-if="total > pageSize" class="pagination-bar" data-test="lead-pagination">
+          <a-pagination v-model:current="currentPage" :total="total" :page-size="pageSize" show-total />
         </div>
       </section>
     </main>
@@ -506,6 +565,84 @@ onMounted(() => {
 .metric-mark.red {
   background: var(--dt-red);
   box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.1);
+}
+
+.reminders-card {
+  background: var(--dt-surface);
+  border: 1px solid var(--dt-line);
+  border-radius: var(--dt-radius);
+  box-shadow: 0 10px 28px rgba(31, 36, 56, 0.04);
+  padding: 16px;
+  margin-bottom: 18px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.reminder-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 850;
+  color: var(--dt-muted);
+}
+
+.reminder-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.reminder-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.reminder-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--dt-text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.reminder-meta {
+  color: var(--dt-muted-2);
+  font-size: 12px;
+}
+
+.reminder-claim {
+  margin-left: auto;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid #cfe0ff;
+  background: var(--dt-brand-soft);
+  color: #1749d5;
+  font-weight: 800;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.reminder-claim:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.reminder-empty {
+  margin: 0;
+  color: var(--dt-muted, #70778c);
+  font-size: 13px;
+}
+
+@media (max-width: 980px) {
+  .reminders-card {
+    grid-template-columns: 1fr;
+  }
 }
 
 .workbench-card {

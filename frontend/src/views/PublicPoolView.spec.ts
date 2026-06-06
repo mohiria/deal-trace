@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import ArcoVue, { Message } from '@arco-design/web-vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { defineComponent, h } from 'vue'
+import { http, HttpResponse } from 'msw'
 import { server } from '../test/msw/server'
 import {
   ADMIN_USER,
@@ -34,13 +35,18 @@ function buildRouter() {
   })
 }
 
-async function mountView(role: typeof ADMIN_USER): Promise<VueWrapper> {
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+async function mountView(
+  role: typeof ADMIN_USER,
+  props: Record<string, unknown> = {},
+): Promise<VueWrapper> {
   const store = useAuthStore()
   store.currentUser = role
   const router = buildRouter()
   await router.push('/public-pool')
   await router.isReady()
-  const wrapper = mount(PublicPoolView, { global: { plugins: [router, ArcoVue] } })
+  const wrapper = mount(PublicPoolView, { props, global: { plugins: [router, ArcoVue] } })
   await flushPromises()
   return wrapper
 }
@@ -107,21 +113,48 @@ describe('refine public pool list iteration', () => {
     expect(wrapper.find('.create-lead-open').exists()).toBe(true)
   })
 
-  it('支持搜索和标准分页并保留认领入口', async () => {
-    const rows = Array.from({ length: 12 }, (_, index) => ({
+  it('服务端分页：翻页向后端请求对应页，换关键词回第 1 页且保留认领入口', async () => {
+    const all = Array.from({ length: 23 }, (_, index) => ({
       ...SAMPLE_POOL_LEAD,
       id: 900 + index,
-      customerName: index === 11 ? '星河公海线索' : `公海分页客户${index + 1}`,
+      customerName: index === 22 ? '星河公海线索' : `公海分页客户${String(index + 1).padStart(2, '0')}`,
     }))
-    server.use(poolList(rows))
-    const wrapper = await mountView(SALES_USER)
+    let lastQuery = new URLSearchParams()
+    server.use(
+      http.get('*/api/leads/pool', ({ request }) => {
+        const url = new URL(request.url)
+        lastQuery = url.searchParams
+        const keyword = url.searchParams.get('keyword')?.trim()
+        const pageNo = Number(url.searchParams.get('page') ?? '1')
+        const size = Number(url.searchParams.get('size') ?? '10')
+        const filtered = keyword ? all.filter((r) => r.customerName!.includes(keyword)) : all
+        const start = (pageNo - 1) * size
+        return HttpResponse.json({
+          code: 'SUCCESS',
+          message: 'OK',
+          data: { items: filtered.slice(start, start + size), total: filtered.length, page: pageNo, size },
+        })
+      }),
+    )
+    const wrapper = await mountView(SALES_USER, { debounceMs: 0 })
 
+    // 第 1 页：分页控件存在，仅当页内容
     expect(wrapper.find('[data-test="list-pagination"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('公海分页客户01')
     expect(wrapper.text()).not.toContain('星河公海线索')
 
-    await wrapper.find('.list-search').setValue('星河')
+    // 翻到第 2 页 → 后端 page=2
+    ;(wrapper.vm as unknown as { currentPage: number }).currentPage = 2
     await flushPromises()
+    expect(lastQuery.get('page')).toBe('2')
+    expect(wrapper.text()).toContain('公海分页客户11')
 
+    // 换关键词 → 回第 1 页且 keyword 下推后端
+    await wrapper.find('.list-search').setValue('星河')
+    await tick()
+    await flushPromises()
+    expect(lastQuery.get('keyword')).toBe('星河')
+    expect(lastQuery.get('page')).toBe('1')
     expect(wrapper.text()).toContain('星河公海线索')
     expect(wrapper.find('.claim-btn').exists()).toBe(true)
   })

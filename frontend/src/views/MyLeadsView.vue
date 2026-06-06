@@ -13,27 +13,27 @@ import CreateLeadModal from '../components/CreateLeadModal.vue'
 const router = useRouter()
 const auth = useAuthStore()
 const leads = useLeadsStore()
+const props = withDefaults(defineProps<{ debounceMs?: number }>(), { debounceMs: 300 })
+
 const keyword = ref('')
 const currentPage = ref(1)
 const pageSize = 10
 const createLeadVisible = ref(false)
+let searchTimer: ReturnType<typeof setTimeout> | null = null
 
+// 服务端分页：当前页 items 与 total 取自 store（按角色：Admin 全部 / Sales 名下）。
 const rows = computed<LeadView[]>(() => (auth.isAdmin ? leads.allLeads : leads.myLeads))
-const filteredRows = computed(() => {
-  const search = keyword.value.trim().toLowerCase()
-  if (!search) return rows.value
-  return rows.value.filter((lead) =>
-    [lead.customerName, lead.customerUsci, lead.businessType, lead.stage, lead.contactName, lead.contactPhone]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-      .includes(search),
-  )
-})
-const pagedRows = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  return filteredRows.value.slice(start, start + pageSize)
-})
+const total = computed(() => (auth.isAdmin ? leads.allLeadsTotal : leads.myLeadsTotal))
+
+/** 拉取当前页：page/size/keyword 下推后端，后端全表匹配后切页。 */
+function load() {
+  const query = { page: currentPage.value, size: pageSize, keyword: keyword.value }
+  if (auth.isAdmin) {
+    void leads.loadAllLeads(query)
+  } else {
+    void leads.loadMyLeads(query)
+  }
+}
 
 const columns: TableColumnData[] = [
   { title: '客户', slotName: 'customer' },
@@ -52,25 +52,32 @@ function openCustomerCreate() {
   void router.push({ name: 'customers' })
 }
 
-async function refreshAfterCreate() {
-  if (auth.isAdmin) {
-    await leads.loadAllLeads()
-  } else {
-    await leads.loadMyLeads()
-  }
+function refreshAfterCreate() {
+  load()
 }
 
-watch(keyword, () => {
-  currentPage.value = 1
-})
+function onSearchInput() {
+  if (searchTimer !== null) {
+    clearTimeout(searchTimer)
+  }
+  searchTimer = setTimeout(() => {
+    // 换关键词回第 1 页；page 变化由 watch 触发重载，避免重复请求。
+    if (currentPage.value !== 1) {
+      currentPage.value = 1
+    } else {
+      load()
+    }
+  }, props.debounceMs)
+}
+
+watch(currentPage, () => load())
 
 onMounted(() => {
-  if (auth.isAdmin) {
-    void leads.loadAllLeads()
-  } else {
-    void leads.loadMyLeads()
-  }
+  load()
 })
+
+// 测试可观测/可驱动的分页状态（组件测试 seam）。
+defineExpose({ currentPage })
 </script>
 
 <template>
@@ -92,11 +99,12 @@ onMounted(() => {
         class="list-search"
         type="search"
         placeholder="搜索客户 / 信用代码 / 业务类型 / 联系人"
+        @input="onSearchInput"
       />
     </div>
 
     <a-table
-      :data="pagedRows"
+      :data="rows"
       :columns="columns"
       :pagination="false"
       :loading="leads.loading"
@@ -115,8 +123,8 @@ onMounted(() => {
         <div class="leads-empty">暂无线索</div>
       </template>
     </a-table>
-    <div v-if="filteredRows.length > pageSize" class="pagination-bar" data-test="list-pagination">
-      <a-pagination v-model:current="currentPage" :total="filteredRows.length" :page-size="pageSize" show-total />
+    <div v-if="total > pageSize" class="pagination-bar" data-test="list-pagination">
+      <a-pagination v-model:current="currentPage" :total="total" :page-size="pageSize" show-total />
     </div>
     <CreateLeadModal v-model:visible="createLeadVisible" @created="refreshAfterCreate" />
   </section>

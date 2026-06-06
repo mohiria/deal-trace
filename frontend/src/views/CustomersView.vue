@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import type { TableColumnData } from '@arco-design/web-vue'
 import { ApiError } from '../api/client'
@@ -14,8 +14,9 @@ import { formatDateTime } from '../utils/datetime'
  */
 const props = withDefaults(defineProps<{ debounceMs?: number }>(), { debounceMs: 300 })
 
-// ---- 列表与搜索（R1）----
+// ---- 列表与搜索（R1，服务端分页 + keyword 下推）----
 const customers = ref<CustomerView[]>([])
+const total = ref(0)
 const keyword = ref('')
 const loading = ref(false)
 const currentPage = ref(1)
@@ -28,15 +29,13 @@ const columns: TableColumnData[] = [
   { title: '创建时间', render: ({ record }) => formatDateTime((record as CustomerView).createdAt) },
 ]
 
-const pagedCustomers = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  return customers.value.slice(start, start + pageSize)
-})
-
-async function loadCustomers(kw?: string) {
+/** 取当前页：page/size/keyword 下推后端，后端全表匹配后切页。 */
+async function loadCustomers() {
   loading.value = true
   try {
-    customers.value = await searchCustomers(kw)
+    const res = await searchCustomers({ page: currentPage.value, size: pageSize, keyword: keyword.value })
+    customers.value = res.items
+    total.value = res.total
   } catch (error) {
     if (error instanceof ApiError) {
       Message.error(error.message)
@@ -51,10 +50,16 @@ function onSearchInput() {
     clearTimeout(searchTimer)
   }
   searchTimer = setTimeout(() => {
-    currentPage.value = 1
-    void loadCustomers(keyword.value)
+    // 换关键词回第 1 页；page 变化由 watch 触发重载，避免重复请求。
+    if (currentPage.value !== 1) {
+      currentPage.value = 1
+    } else {
+      void loadCustomers()
+    }
   }, props.debounceMs)
 }
+
+watch(currentPage, () => void loadCustomers())
 
 // ---- 创建客户（R2）----
 const customerVisible = ref(false)
@@ -76,6 +81,7 @@ async function onCreateCustomer() {
   try {
     const created = await createCustomer(customerForm.value.name, customerForm.value.usci)
     customers.value = [created, ...customers.value]
+    total.value += 1
     customerVisible.value = false
     Message.success('客户创建成功')
   } catch (error) {
@@ -100,6 +106,9 @@ function openLeadModal() {
 onMounted(() => {
   void loadCustomers()
 })
+
+// 测试可观测/可驱动的分页状态（组件测试 seam）。
+defineExpose({ currentPage })
 </script>
 
 <template>
@@ -127,7 +136,7 @@ onMounted(() => {
     </div>
 
     <a-table
-      :data="pagedCustomers"
+      :data="customers"
       :columns="columns"
       :pagination="false"
       :loading="loading"
@@ -138,8 +147,8 @@ onMounted(() => {
         <div class="customers-empty">无匹配客户</div>
       </template>
     </a-table>
-    <div v-if="customers.length > pageSize" class="pagination-bar" data-test="list-pagination">
-      <a-pagination v-model:current="currentPage" :total="customers.length" :page-size="pageSize" show-total />
+    <div v-if="total > pageSize" class="pagination-bar" data-test="list-pagination">
+      <a-pagination v-model:current="currentPage" :total="total" :page-size="pageSize" show-total />
     </div>
 
     <!-- 创建客户 -->

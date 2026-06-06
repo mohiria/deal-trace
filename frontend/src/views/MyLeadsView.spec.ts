@@ -6,6 +6,7 @@ import ArcoVue from '@arco-design/web-vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Router } from 'vue-router'
 import { defineComponent, h } from 'vue'
+import { http, HttpResponse } from 'msw'
 import { server } from '../test/msw/server'
 import { ADMIN_USER, SALES_USER, SAMPLE_LEAD, allLeads, meSuccess, mineLeads } from '../test/msw/handlers'
 import { useAuthStore } from '../stores/auth'
@@ -28,11 +29,15 @@ function buildRouter(): Router {
 })
 }
 
-async function mountView(): Promise<{ wrapper: VueWrapper; router: Router }> {
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+async function mountView(
+  props: Record<string, unknown> = {},
+): Promise<{ wrapper: VueWrapper; router: Router }> {
   const router = buildRouter()
   await router.push('/my-leads')
   await router.isReady()
-  const wrapper = mount(MyLeadsView, { global: { plugins: [router, ArcoVue] } })
+  const wrapper = mount(MyLeadsView, { props, global: { plugins: [router, ArcoVue] } })
   await flushPromises()
   return { wrapper, router }
 }
@@ -95,23 +100,51 @@ describe('refine my leads list iteration', () => {
     expect(wrapper.find('.create-lead-open').exists()).toBe(true)
   })
 
-  it('支持搜索和标准分页', async () => {
-    const rows = Array.from({ length: 12 }, (_, index) => ({
+  it('服务端分页：翻页向后端请求对应页，换关键词回第 1 页且下推后端', async () => {
+    const all = Array.from({ length: 23 }, (_, index) => ({
       ...SAMPLE_LEAD,
       id: 800 + index,
-      customerName: index === 11 ? '星河我的线索' : `我的分页客户${index + 1}`,
+      customerName: index === 22 ? '星河我的线索' : `我的分页客户${String(index + 1).padStart(2, '0')}`,
     }))
-    server.use(mineLeads(rows))
+    let lastQuery = new URLSearchParams()
+    server.use(
+      meSuccess(SALES_USER),
+      http.get('*/api/leads/mine', ({ request }) => {
+        const url = new URL(request.url)
+        lastQuery = url.searchParams
+        const keyword = url.searchParams.get('keyword')?.trim()
+        const pageNo = Number(url.searchParams.get('page') ?? '1')
+        const size = Number(url.searchParams.get('size') ?? '10')
+        const filtered = keyword ? all.filter((r) => r.customerName!.includes(keyword)) : all
+        const start = (pageNo - 1) * size
+        return HttpResponse.json({
+          code: 'SUCCESS',
+          message: 'OK',
+          data: { items: filtered.slice(start, start + size), total: filtered.length, page: pageNo, size },
+        })
+      }),
+    )
     const store = useAuthStore()
     store.currentUser = SALES_USER
-    const { wrapper } = await mountView()
+    const { wrapper } = await mountView({ debounceMs: 0 })
 
+    // 第 1 页：分页控件存在，仅当页内容
     expect(wrapper.find('[data-test="list-pagination"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('我的分页客户01')
     expect(wrapper.text()).not.toContain('星河我的线索')
 
-    await wrapper.find('.list-search').setValue('星河')
+    // 翻到第 2 页 → 后端 page=2（直接驱动分页状态，避免 teleport 取值脆弱）
+    ;(wrapper.vm as unknown as { currentPage: number }).currentPage = 2
     await flushPromises()
+    expect(lastQuery.get('page')).toBe('2')
+    expect(wrapper.text()).toContain('我的分页客户11')
 
+    // 换关键词 → 回第 1 页且 keyword 下推后端
+    await wrapper.find('.list-search').setValue('星河')
+    await tick()
+    await flushPromises()
+    expect(lastQuery.get('keyword')).toBe('星河')
+    expect(lastQuery.get('page')).toBe('1')
     expect(wrapper.text()).toContain('星河我的线索')
   })
 })

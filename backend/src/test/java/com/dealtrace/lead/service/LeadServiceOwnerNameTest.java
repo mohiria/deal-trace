@@ -3,6 +3,7 @@ package com.dealtrace.lead.service;
 import com.dealtrace.account.entity.Account;
 import com.dealtrace.account.repository.AccountMapper;
 import com.dealtrace.customer.repository.CustomerMapper;
+import com.dealtrace.customer.service.CustomerService;
 import com.dealtrace.lead.entity.Lead;
 import com.dealtrace.lead.repository.LeadMapper;
 import com.dealtrace.systemlog.SystemLogPort;
@@ -28,12 +29,13 @@ class LeadServiceOwnerNameTest {
 
     private final LeadMapper leadMapper = mock(LeadMapper.class);
     private final CustomerMapper customerMapper = mock(CustomerMapper.class);
+    private final CustomerService customerService = mock(CustomerService.class);
     private final AccountMapper accountMapper = mock(AccountMapper.class);
     private final LeadDuplicateService duplicateService = mock(LeadDuplicateService.class);
     private final SystemLogPort systemLogPort = mock(SystemLogPort.class);
 
     private final LeadService service =
-        new LeadService(leadMapper, customerMapper, accountMapper, duplicateService, systemLogPort);
+        new LeadService(leadMapper, customerMapper, customerService, accountMapper, duplicateService, systemLogPort);
 
     private static Account account(long id, String name) {
         Account a = new Account();

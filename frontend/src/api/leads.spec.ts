@@ -41,17 +41,18 @@ import {
 describe('leads API（D1）', () => {
   afterEach(() => server.resetHandlers())
 
-  it('fetchMyLeads 命中 GET /leads/mine 并 unwrap 列表', async () => {
+  it('fetchMyLeads 命中 GET /leads/mine 并 unwrap 分页信封', async () => {
     server.use(mineLeads([SAMPLE_LEAD]))
-    const rows = await fetchMyLeads()
-    expect(rows).toHaveLength(1)
-    expect(rows[0]?.id).toBe(SAMPLE_LEAD.id)
+    const res = await fetchMyLeads()
+    expect(res.items).toHaveLength(1)
+    expect(res.items[0]?.id).toBe(SAMPLE_LEAD.id)
+    expect(res.total).toBe(1)
   })
 
   it('fetchAllLeads 命中 GET /leads', async () => {
     server.use(allLeads([SAMPLE_LEAD]))
-    const rows = await fetchAllLeads()
-    expect(rows[0]?.id).toBe(SAMPLE_LEAD.id)
+    const res = await fetchAllLeads()
+    expect(res.items[0]?.id).toBe(SAMPLE_LEAD.id)
   })
 
   it('fetchLead 命中 GET /leads/{id}', async () => {
@@ -62,8 +63,8 @@ describe('leads API（D1）', () => {
 
   it('fetchPool 命中 GET /leads/pool', async () => {
     server.use(poolList([SAMPLE_POOL_LEAD]))
-    const rows = await fetchPool()
-    expect(rows[0]?.contactPhone).toBe(SAMPLE_POOL_LEAD.contactPhone)
+    const res = await fetchPool()
+    expect(res.items[0]?.contactPhone).toBe(SAMPLE_POOL_LEAD.contactPhone)
   })
 
   it('claimLead 命中 POST /leads/{id}/claim', async () => {

@@ -9,6 +9,7 @@ import { BUSINESS_TYPES, isValidContactPhone } from '../utils/lead'
 import { formatDateTime } from '../utils/datetime'
 import type { CustomerView } from '../api/customers'
 import CustomerSelect from './CustomerSelect.vue'
+import type { NewCustomerInput } from './CustomerSelect.vue'
 
 const props = withDefaults(defineProps<{ visible: boolean; debounceMs?: number }>(), { debounceMs: 300 })
 const emit = defineEmits<{
@@ -25,6 +26,7 @@ const modalVisible = computed({
 
 const selectedCustomerId = ref<number | null>(null)
 const selectedCustomer = ref<CustomerView | null>(null)
+const newCustomer = ref<NewCustomerInput | null>(null)
 const leadForm = ref({ businessType: '', contactName: '', contactPhone: '', leadSource: '' })
 const ownerMode = ref<'self' | 'pool'>('self')
 const dupResult = ref<DuplicateCheckResult | null>(null)
@@ -34,6 +36,7 @@ const submittingLead = ref(false)
 function resetForm() {
   selectedCustomerId.value = null
   selectedCustomer.value = null
+  newCustomer.value = null
   leadForm.value = { businessType: '', contactName: '', contactPhone: '', leadSource: '' }
   ownerMode.value = 'self'
   dupResult.value = null
@@ -88,9 +91,20 @@ function blockingMessage(reason: string | null): string {
   return '该业务线索不可重复创建。'
 }
 
+/** 内联新客户被后端按 USCI 冲突拒绝时的语义（spec：不暴露校验位出错位置）。 */
+function duplicateCustomerMessage(): string {
+  return '该统一社会信用代码已属于其他客户，请改用搜索选择既有客户'
+}
+
 async function onCreateLead() {
-  if (selectedCustomerId.value == null) {
-    Message.warning('请先选择客户')
+  const usingNewCustomer = newCustomer.value != null
+  if (selectedCustomerId.value == null && !usingNewCustomer) {
+    Message.warning('请先选择或录入客户')
+    return
+  }
+  if (usingNewCustomer
+    && (newCustomer.value!.name.trim() === '' || newCustomer.value!.usci.trim() === '')) {
+    Message.warning('请填写新客户名称与统一社会信用代码')
     return
   }
   if (!leadForm.value.businessType) {
@@ -105,7 +119,8 @@ async function onCreateLead() {
     Message.warning('联系电话格式不正确')
     return
   }
-  if (dupResult.value && dupResult.value.canCreate === false) {
+  // 查重预检仅对既有客户路径生效；新客户路径必无既有线索，由后端事务内裁决。
+  if (!usingNewCustomer && dupResult.value && dupResult.value.canCreate === false) {
     Message.warning(blockingMessage(dupResult.value.blockingReason))
     return
   }
@@ -114,7 +129,9 @@ async function onCreateLead() {
   try {
     const source = leadForm.value.leadSource.trim()
     await createLead({
-      customerId: selectedCustomerId.value,
+      ...(usingNewCustomer
+        ? { newCustomer: { name: newCustomer.value!.name.trim(), usci: newCustomer.value!.usci.trim() } }
+        : { customerId: selectedCustomerId.value! }),
       businessType: leadForm.value.businessType,
       contactName: leadForm.value.contactName.trim(),
       contactPhone: leadForm.value.contactPhone.trim(),
@@ -125,7 +142,9 @@ async function onCreateLead() {
     Message.success('线索创建成功')
     emit('created')
   } catch (error) {
-    if (error instanceof ApiError) {
+    if (error instanceof ApiError && error.code === 'DUPLICATE_CUSTOMER') {
+      Message.error(duplicateCustomerMessage())
+    } else if (error instanceof ApiError) {
       Message.error(error.message)
     } else {
       Message.error('创建失败，请稍后重试')
@@ -146,7 +165,12 @@ async function onCreateLead() {
   >
     <a-form :model="leadForm" layout="vertical" @submit.prevent>
       <a-form-item label="客户" required>
-        <CustomerSelect v-model="selectedCustomerId" :debounce-ms="props.debounceMs" @select="onCustomerSelected" />
+        <CustomerSelect
+          v-model="selectedCustomerId"
+          v-model:new-customer="newCustomer"
+          :debounce-ms="props.debounceMs"
+          @select="onCustomerSelected"
+        />
       </a-form-item>
       <a-form-item label="业务类型" required>
         <a-radio-group v-model="leadForm.businessType" class="lead-type">

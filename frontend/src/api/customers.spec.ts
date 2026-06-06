@@ -14,30 +14,42 @@ import { searchCustomers, createCustomer } from './customers'
 describe('customers API（D1）', () => {
   afterEach(() => server.resetHandlers())
 
-  it('searchCustomers 无关键词命中 GET /customers 且不带 keyword query', async () => {
+  it('searchCustomers 无关键词命中 GET /customers（分页信封，不带 keyword query）', async () => {
     let capturedUrl = ''
     server.use(
       http.get('*/api/customers', ({ request }) => {
         capturedUrl = request.url
-        return HttpResponse.json({ code: 'SUCCESS', message: 'OK', data: [SAMPLE_CUSTOMER] })
+        return HttpResponse.json({
+          code: 'SUCCESS',
+          message: 'OK',
+          data: { items: [SAMPLE_CUSTOMER], total: 1, page: 1, size: 20 },
+        })
       }),
     )
-    const rows = await searchCustomers()
-    expect(rows).toHaveLength(1)
-    expect(rows[0]?.id).toBe(SAMPLE_CUSTOMER.id)
+    const res = await searchCustomers()
+    expect(res.items).toHaveLength(1)
+    expect(res.items[0]?.id).toBe(SAMPLE_CUSTOMER.id)
+    expect(res.total).toBe(1)
     expect(new URL(capturedUrl).searchParams.has('keyword')).toBe(false)
   })
 
-  it('searchCustomers 带关键词命中 GET /customers?keyword=', async () => {
+  it('searchCustomers 带关键词与分页命中 GET /customers?keyword=&page=&size=', async () => {
     let capturedUrl = ''
     server.use(
       http.get('*/api/customers', ({ request }) => {
         capturedUrl = request.url
-        return HttpResponse.json({ code: 'SUCCESS', message: 'OK', data: [SAMPLE_CUSTOMER] })
+        return HttpResponse.json({
+          code: 'SUCCESS',
+          message: 'OK',
+          data: { items: [SAMPLE_CUSTOMER], total: 1, page: 2, size: 20 },
+        })
       }),
     )
-    await searchCustomers('建筑')
-    expect(new URL(capturedUrl).searchParams.get('keyword')).toBe('建筑')
+    await searchCustomers({ keyword: '建筑', page: 2 })
+    const params = new URL(capturedUrl).searchParams
+    expect(params.get('keyword')).toBe('建筑')
+    expect(params.get('page')).toBe('2')
+    expect(params.get('size')).toBe('20')
   })
 
   it('createCustomer 命中 POST /customers 并原样提交 name/usci（不前端归一化）', async () => {

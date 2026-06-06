@@ -1,4 +1,6 @@
 import { apiClient } from './client'
+import type { PageQuery, PageResult } from './pagination'
+import { pageParams } from './pagination'
 
 /**
  * 线索 API 封装（design D1）。视图 / store 不直接调 `apiClient`，统一经本层。
@@ -68,9 +70,19 @@ export interface ProgressLogView {
   trackTime: string
 }
 
-/** 创建线索入参（spec R4 / 后端 `CreateLeadRequest`）。`businessYear` / `stage` 由服务端派生，前端不传。 */
+/** 内联新建客户入参（spec：内联建客户 / 后端 `CreateLeadRequest.NewCustomer`）。 */
+export interface NewCustomerPayload {
+  name: string
+  usci: string
+}
+
+/**
+ * 创建线索入参（spec R4 / 后端 `CreateLeadRequest`）。`businessYear` / `stage` 由服务端派生，前端不传。
+ * 关联客户二选一（恰择其一）：`customerId`（选既有）或 `newCustomer`（内联录入，后端事务内 find-or-create）。
+ */
 export interface CreateLeadPayload {
-  customerId: number
+  customerId?: number
+  newCustomer?: NewCustomerPayload
   businessType: string
   contactName: string
   contactPhone: string
@@ -95,14 +107,14 @@ export interface DuplicateCheckResult {
   historicalLost: HistoricalLost[]
 }
 
-/** Sales 名下线索（`GET /leads/mine`）。 */
-export function fetchMyLeads(): Promise<LeadView[]> {
-  return apiClient.get<LeadView[], LeadView[]>('/leads/mine')
+/** Sales 名下线索（`GET /leads/mine`）。服务端分页 + keyword 全表下推。 */
+export function fetchMyLeads(query: PageQuery = {}): Promise<PageResult<LeadView>> {
+  return apiClient.get<PageResult<LeadView>, PageResult<LeadView>>('/leads/mine', { params: pageParams(query) })
 }
 
-/** 全部线索（`GET /leads`，仅 ADMIN）。 */
-export function fetchAllLeads(): Promise<LeadView[]> {
-  return apiClient.get<LeadView[], LeadView[]>('/leads')
+/** 全部线索（`GET /leads`，仅 ADMIN）。服务端分页 + keyword 全表下推。 */
+export function fetchAllLeads(query: PageQuery = {}): Promise<PageResult<LeadView>> {
+  return apiClient.get<PageResult<LeadView>, PageResult<LeadView>>('/leads', { params: pageParams(query) })
 }
 
 /** 线索详情（`GET /leads/{id}`）。 */
@@ -110,9 +122,17 @@ export function fetchLead(id: number): Promise<LeadView> {
   return apiClient.get<LeadView, LeadView>(`/leads/${id}`)
 }
 
-/** 公海线索列表（`GET /leads/pool`）。 */
-export function fetchPool(): Promise<PoolLeadView[]> {
-  return apiClient.get<PoolLeadView[], PoolLeadView[]>('/leads/pool')
+/**
+ * 我的长期未跟踪线索（`GET /leads/mine/stale`）。供工作台今日提醒下推：
+ * 调用者名下、未结束、超后端阈值（或从未跟踪）的线索，升序取前 N。阈值由后端裁决，前端不重算。
+ */
+export function fetchStaleLeads(): Promise<LeadView[]> {
+  return apiClient.get<LeadView[], LeadView[]>('/leads/mine/stale')
+}
+
+/** 公海线索列表（`GET /leads/pool`）。服务端分页 + keyword 全表下推。 */
+export function fetchPool(query: PageQuery = {}): Promise<PageResult<PoolLeadView>> {
+  return apiClient.get<PageResult<PoolLeadView>, PageResult<PoolLeadView>>('/leads/pool', { params: pageParams(query) })
 }
 
 /** 认领公海线索（`POST /leads/{id}/claim`，仅 SALES）。 */

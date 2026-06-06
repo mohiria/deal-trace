@@ -81,6 +81,65 @@ public class CustomerService {
         return c;
     }
 
+    /**
+     * 内联建客户的 find-or-create（spec：内联建客户）。按 USCI 仲裁：
+     * <ul>
+     *   <li>USCI 未命中 → 建客户并返回（并发同 USCI 由唯一约束兜底：catch 后重查复用）。</li>
+     *   <li>USCI 命中且名称一致（trim 后全等）→ 复用既有客户，不新增行。</li>
+     *   <li>USCI 命中但名称不一致 → {@code DUPLICATE_CUSTOMER}（不创建、不改名）。</li>
+     * </ul>
+     * 归一化 / 校验口径与 {@link #create} 完全一致（trim name；normalize+isValid USCI）。
+     * 调用方（LeadService.create）在同一 {@code @Transactional} 内调用，确保后续线索创建失败时
+     * 新建客户随事务回滚、无孤儿。
+     */
+    @Transactional
+    public Customer findOrCreate(String rawName, String rawUsci) {
+        String name = rawName == null ? "" : rawName.strip();
+        if (name.isEmpty()) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "客户名称不可为空");
+        }
+        String usci = UsciValidator.normalize(rawUsci);
+        if (usci == null || usci.isEmpty()) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "USCI 不可为空");
+        }
+        if (!UsciValidator.isValid(usci)) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR,
+                "USCI 不符合 GB 32100-2015 标准格式或校验位错误");
+        }
+
+        Customer existing = customerMapper.selectOne(
+            new QueryWrapper<Customer>().eq("usci", usci));
+        if (existing != null) {
+            return arbitrate(existing, name);
+        }
+
+        Customer c = new Customer();
+        c.setName(name);
+        c.setUsci(usci);
+        c.setCreatedAt(LocalDateTime.now());
+        try {
+            customerMapper.insert(c);
+        } catch (DuplicateKeyException ex) {
+            // 并发同 USCI：唯一约束兜底，重查既有后按同样仲裁复用 / 拒绝
+            Customer raced = customerMapper.selectOne(
+                new QueryWrapper<Customer>().eq("usci", usci));
+            if (raced != null) {
+                return arbitrate(raced, name);
+            }
+            throw translateDuplicateKey(ex); // 名称撞既有（不同 USCI）
+        }
+        return c;
+    }
+
+    /** USCI 命中后按名称仲裁：同名复用、异名 DUPLICATE_CUSTOMER。 */
+    private Customer arbitrate(Customer existing, String name) {
+        if (existing.getName().equals(name)) {
+            return existing;
+        }
+        throw new BusinessException(ErrorCode.DUPLICATE_CUSTOMER,
+            "该统一社会信用代码已存在且对应的客户名称不一致");
+    }
+
     /** 服务端分页搜索：keyword 非空 → name OR usci 全表子串匹配；按 created_at 倒序切页 + count。 */
     @Transactional(readOnly = true)
     public PageView<Customer> search(PageQuery query) {

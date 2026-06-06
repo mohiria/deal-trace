@@ -71,12 +71,12 @@ test('Admin 创建 Sales → 列表可见 → 新建线索 → 分配给该 Sale
   await expect(page.getByText('客户创建成功')).toBeVisible()
 
   await page.locator('.create-lead-open').click()
-  await page.locator('.cs-search').fill(customerName)
-  await page.locator('.cs-option').first().click()
-  await page.locator('.lead-type').getByText('BIM咨询').click()
-  await page.locator('.lead-contact-name input').fill('王工')
-  await page.locator('.lead-contact-phone input').fill('13812345678')
-  await page.locator('.lead-confirm').click()
+  await page.locator('.cs-search:visible').fill(customerName)
+  await page.locator('.cs-option:visible').first().click()
+  await page.locator('.lead-type:visible').getByText('BIM咨询').click()
+  await page.locator('.lead-contact-name:visible input').fill('王工')
+  await page.locator('.lead-contact-phone:visible input').fill('13812345678')
+  await page.locator('.lead-confirm:visible').click()
   await expect(page.getByText('线索创建成功')).toBeVisible()
 
   // 进入该线索详情（Admin 在我的线索看到全部线索）
@@ -90,6 +90,6 @@ test('Admin 创建 Sales → 列表可见 → 新建线索 → 分配给该 Sale
   await page.locator('.assign-confirm').click()
   await expect(page.getByText('已分配')).toBeVisible()
 
-  // 当前归属更新（不再为公海）
-  await expect(page.getByText('销售 #')).toBeVisible()
+  // 当前归属更新为该 Sales（按 design D1 展示销售姓名，而非「销售 #id」拼串）
+  await expect(page.getByText(salesName).first()).toBeVisible()
 })

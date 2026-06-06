@@ -152,6 +152,77 @@ describe('CreateLeadModal', () => {
     expect(captured!['assignToPool']).toBe(true)
   })
 
+  it('候选为空录入新客户后提交携带 newCustomer 且不发查重预检', async () => {
+    let captured: Record<string, unknown> | null = null
+    let precheckCalled = false
+    server.use(
+      customerSearch([], []),
+      http.get('*/api/leads/duplicate-check', () => {
+        precheckCalled = true
+        return HttpResponse.json({
+          code: 'SUCCESS',
+          message: 'OK',
+          data: { canCreate: true, blockingReason: null, historicalLost: [] },
+        })
+      }),
+      http.post('*/api/leads', async ({ request }) => {
+        captured = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json({ code: 'SUCCESS', message: 'OK', data: {} })
+      }),
+    )
+    const wrapper = await mountModal()
+
+    await wrapper.find('.cs-search').setValue('星河设计院')
+    await tick()
+    await flushPromises()
+    await wrapper.find('.cs-create-new').trigger('click')
+    await wrapper.find('.cs-new-usci').setValue('91310000MA1234567N')
+    await flushPromises()
+
+    await chooseType(wrapper)
+    await wrapper.find('.lead-contact-name input').setValue('王工')
+    await wrapper.find('.lead-contact-phone input').setValue('13812345678')
+    await wrapper.find('.lead-confirm').trigger('click')
+    await flushPromises()
+
+    expect(captured).not.toBeNull()
+    expect(captured!['newCustomer']).toEqual({ name: '星河设计院', usci: '91310000MA1234567N' })
+    expect(captured!['customerId']).toBeUndefined()
+    expect(precheckCalled).toBe(false)
+  })
+
+  it('内联新客户被后端 DUPLICATE_CUSTOMER 拒绝时展示语义且不暴露校验位位置', async () => {
+    server.use(
+      customerSearch([], []),
+      http.post('*/api/leads', () =>
+        HttpResponse.json(
+          { code: 'DUPLICATE_CUSTOMER', message: 'USCI 已存在', data: null },
+          { status: 400 },
+        ),
+      ),
+    )
+    const errSpy = vi.spyOn(Message, 'error')
+    const wrapper = await mountModal()
+
+    await wrapper.find('.cs-search').setValue('撞码客户')
+    await tick()
+    await flushPromises()
+    await wrapper.find('.cs-create-new').trigger('click')
+    await wrapper.find('.cs-new-usci').setValue('91110000123456789Q')
+    await flushPromises()
+
+    await chooseType(wrapper)
+    await wrapper.find('.lead-contact-name input').setValue('王工')
+    await wrapper.find('.lead-contact-phone input').setValue('13812345678')
+    await wrapper.find('.lead-confirm').trigger('click')
+    await flushPromises()
+
+    const msgs = errSpy.mock.calls.map((c) => String(c[0]))
+    expect(msgs.some((m) => m.includes('该统一社会信用代码已属于其他客户'))).toBe(true)
+    // 不暴露校验位/具体字符位置
+    expect(msgs.some((m) => /第\s*\d+\s*位|位置|index/i.test(m))).toBe(false)
+  })
+
   it('后端业务错误透传错误提示', async () => {
     server.use(customerSearch([SAMPLE_CUSTOMER], [SAMPLE_CUSTOMER]), duplicateCheckCanCreate(), createLeadValidation('联系电话格式非法'))
     const errSpy = vi.spyOn(Message, 'error')
